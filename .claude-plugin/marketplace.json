@@ -11,7 +11,7 @@
     {
       "name": "cc-trace",
       "version": "0.1.0",
-      "source": ".",
+      "source": "./plugin",
       "description": "Persistent memory for Claude Code — session-level capture, keyword + AI search, Web UI"
     }
   ]
