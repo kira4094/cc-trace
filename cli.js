@@ -50,9 +50,9 @@ function cmdInstall() {
   if (!s.hooks) s.hooks = {};
   const B = path.join(HOME, '.claude-memory', 'scripts').replace(/\\/g, '/');
   s.hooks = {
-    Setup: [{ matcher: '', hooks: [{ type: 'command', command: `node ${B}/server-launcher.cjs`, async: true, timeout: 10 }] }],
-    SessionStart: [{ matcher: '', hooks: [
-      { type: 'command', command: `node ${B}/server-launcher.cjs`, async: true, timeout: 10 },
+    Setup: [{ matcher: '*', hooks: [{ type: 'command', command: `node ${B}/server-launcher.cjs`, async: true, timeout: 30 }] }],
+    SessionStart: [{ matcher: '*', hooks: [
+      { type: 'command', command: `node ${B}/server-launcher.cjs`, async: true, timeout: 30 },
       { type: 'command', command: `node ${B}/inject.cjs`, async: true, timeout: 10 }
     ] }],
     UserPromptSubmit: [{ hooks: [

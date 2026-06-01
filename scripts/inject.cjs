@@ -29,15 +29,20 @@ function parseMemoryIndex(filePath) {
   const content = fs.readFileSync(filePath, "utf8");
   const entries = [];
 
-  // Match markdown list items: "- [title](filename.md) — description"
-  const lineRe = /^\s*-\s+\[([^\]]+)\]\(([^)]+\.md)\)\s*(?:[—–-]\s*)?(.*)?$/;
+  // Format: "- [content] Title" — extract the [content] as the reference
+  const lineRe = /^\s*-\s+\[([^\]]+)\]\s*(.*)?$/;
   for (const line of content.split("\n")) {
     const m = line.match(lineRe);
     if (m) {
+      const ref = m[1].trim(); // e.g. "2026-06-01/session-test123"
+      const desc = (m[2] || "").trim();
+      // Derive filename from ref (last segment)
+      const parts = ref.split("/");
+      const fileName = parts[parts.length - 1] + ".md";
       entries.push({
-        title: m[1].trim(),
-        filename: m[2].trim(),
-        description: (m[3] || "").trim(),
+        title: ref,
+        filename: fileName,
+        description: desc,
       });
     }
   }
