@@ -194,7 +194,7 @@ function getSessionRecords(date, sessionId) {
   records.sort((a, b) => {
     const ta = a.ts || a.timestamp || "";
     const tb = b.ts || b.timestamp || "";
-    return ta.localeCompare(tb);
+    return tb.localeCompare(ta);
   });
 
   return {
