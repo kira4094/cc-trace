@@ -200,8 +200,12 @@ function checkCheckpoint() {
 function main() {
   // Read stdin payload from Claude Code hook
   let input = "";
-  const buf = fs.readFileSync(0, "utf8");
-  input = buf.trim();
+  try {
+    const buf = fs.readFileSync(0, "utf8");
+    input = buf.trim();
+  } catch {
+    process.exit(0);
+  }
 
   if (!input) {
     process.exit(0);

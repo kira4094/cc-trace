@@ -1,0 +1,9 @@
+{
+  "$schema": "https://plugins.claude-code.dev/schema/marketplace.json",
+  "version": 1,
+  "description": "Persistent memory for Claude Code — session-level capture, keyword + AI search, Web UI",
+  "source": {
+    "source": "github",
+    "repo": "kira4094/cc-trace"
+  }
+}

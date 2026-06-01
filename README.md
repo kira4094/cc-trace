@@ -20,7 +20,13 @@ Persistent memory for Claude Code — zero dependencies, session-level isolation
 
 ```bash
 npm install -g @kira4094/cc-trace
+# Then restart and run:
+# /plugin marketplace add cc-trace
+# /plugin install cc-trace
+
+Or use:
 cc-trace install
+cc-trace open
 ```
 
 Then **restart Claude Code**. The hooks will start recording automatically.
@@ -29,7 +35,13 @@ Then **restart Claude Code**. The hooks will start recording automatically.
 
 ```bash
 # Install hooks and configure
+# Then restart and run:
+# /plugin marketplace add cc-trace
+# /plugin install cc-trace
+
+Or use:
 cc-trace install
+cc-trace open
 
 # Remove hooks (keep data)
 cc-trace uninstall

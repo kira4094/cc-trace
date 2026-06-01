@@ -56,7 +56,6 @@ const HOOKS = {
   ],
   PostToolUse: [
     {
-      matcher: '',
       hooks: [
         {
           type: 'command',
@@ -81,21 +80,21 @@ const HOOKS = {
   ],
 };
 
+
 const CLAUDE_MD_SECTION = `
 
 ${HOOK_SECTION_TITLE}
 
 You have a persistent memory system at \`~/.claude-memory/\`.
 
-Available tools (run as shell commands):
-- \`!cc-trace search <keywords>\` — Search past conversations for relevant information. Use this when the user asks about past work, decisions, or discussions.
-- \`!cc-trace search --ai <query>\` — AI-powered semantic search when keywords might not match exactly.
+Available tools:
+- The Web UI is at http://localhost:13779 — open it to browse sessions.
+- Search via: curl -s "http://localhost:13779/api/search?q=<keywords>"
 
 Memory rules:
-1. When the user asks about past conversations, content, or decisions: run \`!cc-trace search <keywords>\` immediately
-2. If search returns results containing \`ai_fallback\`, also consider those results
-3. If search returns nothing useful, say you're not sure
-4. Recent context is already injected below by the SessionStart hook
+1. When the user asks about past conversations: search immediately
+2. If search returns nothing useful, say you\'re not sure
+3. Recent context is injected below by the SessionStart hook
 
 `;
 
@@ -175,51 +174,37 @@ function cmdInstall() {
   fs.mkdirSync(TRACE_DIR, { recursive: true });
   fs.mkdirSync(path.dirname(SETTINGS_PATH), { recursive: true });
 
-  // 2. Read or initialise settings.json
+  // 2. Register marketplace source in settings.json
   let settings = readJson(SETTINGS_PATH);
   if (!settings) {
     settings = {};
     log('Creating new settings.json');
   }
-
-  // 3. Merge hooks into settings (preserve existing hooks)
-  if (!settings.hooks) {
-    settings.hooks = {};
+  if (!settings.extraKnownMarketplaces) {
+    settings.extraKnownMarketplaces = {};
   }
-  for (const [event, entries] of Object.entries(HOOKS)) {
-    const existing = settings.hooks[event] || [];
-    // Only add our hooks if they're not already present (check by command path)
-    const existingCmds = new Set();
-    for (const entry of existing) {
-      for (const h of entry.hooks || []) {
-        existingCmds.add(h.command);
-      }
-    }
-    const toAdd = entries.filter((entry) =>
-      !entry.hooks?.some((h) => existingCmds.has(h.command))
-    );
-    if (toAdd.length > 0) {
-      settings.hooks[event] = [...existing, ...toAdd];
-    }
-  }
+  settings.extraKnownMarketplaces["cc-trace"] = {
+    source: { source: "github", repo: "kira4094/cc-trace" }
+  };
   writeJson(SETTINGS_PATH, settings);
-  log(`Hooks installed in ${SETTINGS_PATH}`);
+  log('Marketplace source registered');
 
-  // 4. Inject section into CLAUDE.md
+  // 3. Inject section into CLAUDE.md
   injectClaudeMdSection();
 
-  // 5. Copy script files to stable location
-  copyScriptFiles();
-
-  // 6. Write default config
+  // 4. Write default config
   writeJson(CONFIG_PATH, {
     port: SERVER_PORT,
     traceDir: TRACE_DIR,
-    version: 1,
+    version: 2,
   });
   log(`Config written to ${CONFIG_PATH}`);
 
-  log('Installation complete.');
+  log('');
+  log('Installation complete! Now install the plugin in Claude Code:');
+  log('  /plugin marketplace add cc-trace');
+  log('  /plugin install cc-trace');
+  log('Then restart Claude Code.');
 }
 
 function injectClaudeMdSection() {
@@ -265,38 +250,16 @@ function copyScriptFiles() {
 // ---------------------------------------------------------------------------
 
 function cmdUninstall(purge) {
-  // 1. Remove cc-trace hooks from settings.json (preserve other hooks)
+  // 1. Remove cc-trace marketplace source from settings.json
   if (fs.existsSync(SETTINGS_PATH)) {
     const settings = readJson(SETTINGS_PATH);
-    if (settings && settings.hooks) {
-      const ourCmds = new Set();
-      for (const entries of Object.values(HOOKS)) {
-        for (const entry of entries) {
-          for (const h of entry.hooks || []) {
-            ourCmds.add(h.command);
-          }
-        }
-      }
-      for (const event of Object.keys(settings.hooks)) {
-        const entries = settings.hooks[event];
-        if (Array.isArray(entries)) {
-          // Filter out matcher entries that only contain our hooks
-          settings.hooks[event] = entries.filter((entry) => {
-            if (!entry.hooks) return true;
-            const onlyOurs = entry.hooks.every((h) => ourCmds.has(h.command));
-            return !onlyOurs;
-          });
-          // Remove empty arrays
-          if (settings.hooks[event].length === 0) {
-            delete settings.hooks[event];
-          }
-        }
-      }
-      if (Object.keys(settings.hooks).length === 0) {
-        delete settings.hooks;
+    if (settings && settings.extraKnownMarketplaces) {
+      delete settings.extraKnownMarketplaces["cc-trace"];
+      if (Object.keys(settings.extraKnownMarketplaces).length === 0) {
+        delete settings.extraKnownMarketplaces;
       }
       writeJson(SETTINGS_PATH, settings);
-      log(`Claude-trace hooks removed from ${SETTINGS_PATH}`);
+      log('Marketplace source removed');
     }
   }
 
