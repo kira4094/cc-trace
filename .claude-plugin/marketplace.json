@@ -1,9 +1,18 @@
 {
-  "$schema": "https://plugins.claude-code.dev/schema/marketplace.json",
-  "version": 1,
-  "description": "Persistent memory for Claude Code — session-level capture, keyword + AI search, Web UI",
-  "source": {
-    "source": "github",
-    "repo": "kira4094/cc-trace"
-  }
+  "name": "kira4094",
+  "version": "1.0.0",
+  "owner": {
+    "name": "kira4094"
+  },
+  "metadata": {
+    "description": "Persistent memory for Claude Code — session-level capture, keyword + AI search, Web UI"
+  },
+  "plugins": [
+    {
+      "name": "cc-trace",
+      "version": "0.1.0",
+      "source": ".",
+      "description": "Persistent memory for Claude Code — session-level capture, keyword + AI search, Web UI"
+    }
+  ]
 }
