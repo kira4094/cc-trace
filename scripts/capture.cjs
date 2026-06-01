@@ -277,12 +277,17 @@ function main() {
   }
 
   // Write/update meta
-  writeMeta(sessionId, {
+  const metaPayload = {
     sessionId,
     cwd: process.cwd(),
     model: payload.model || "",
     firstSeen: ts,
-  });
+  };
+  // Set title from first user message
+  if (isUserPrompt && record.content) {
+    metaPayload.title = record.content.slice(0, 60).replace(/\n/g, ' ');
+  }
+  writeMeta(sessionId, metaPayload);
 
   // Trigger checkpoint if this was a user message
   if (isUserPrompt) {

@@ -126,8 +126,35 @@ function getSessionGroups() {
         recordCount += content.trim().split("\n").filter(Boolean).length;
       }
 
+      // Derive session title
+      let title = sid.slice(0, 20);
+      try {
+        const meta = safeReadFile(path.join(sessionDir, 'meta.json'));
+        if (meta) {
+          const m = JSON.parse(meta);
+          if (m.title) title = m.title;
+        }
+      } catch {}
+      if (title === sid.slice(0, 20)) {
+        // Read first chunk to find first user message
+        const chunks = safeReadDir(sessionDir)
+          .filter((f) => f.startsWith('chunk-') && f.endsWith('.jsonl')).sort();
+        if (chunks.length > 0) {
+          const firstChunk = safeReadFile(path.join(sessionDir, chunks[0]));
+          for (const line of firstChunk.trim().split('\n').filter(Boolean)) {
+            try {
+              const rec = JSON.parse(line);
+              if (rec.type === 'user_message' && rec.content) {
+                title = rec.content.slice(0, 60).replace(/\n/g, ' ');
+                break;
+              }
+            } catch {}
+          }
+        }
+      }
+
       if (recordCount > 0) {
-        sessions.push({ sessionId: sid, recordCount, date });
+        sessions.push({ sessionId: sid, title, recordCount, date });
       }
     }
 
