@@ -1,6 +1,6 @@
 {
   "name": "@kira4094/cc-trace",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "Persistent memory for Claude Code — zero deps, session-level isolation, keyword + AI search",
   "license": "MIT",
   "author": "kira4094",
