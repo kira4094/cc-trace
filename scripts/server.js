@@ -228,6 +228,7 @@ function runSearch(query) {
         cwd: SCRIPTS_DIR,
         timeout: 15000,
         maxBuffer: 1024 * 1024,
+        windowsHide: true,
       },
       (err, stdout, stderr) => {
         if (err) {
@@ -301,8 +302,8 @@ async function handleRequest(req, res) {
       return;
     }
 
-    // Only accept GET
-    if (req.method !== "GET") {
+    // Accept GET or POST with form data
+    if (req.method !== "GET" && req.method !== "POST") {
       sendError(res, "Method not allowed", 405);
       return;
     }
