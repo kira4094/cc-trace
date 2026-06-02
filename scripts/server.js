@@ -100,68 +100,62 @@ function isDirectory(p) {
 }
 
 /**
- * Scan sessions directory and return summary grouped by date.
+ * Scan sessions directory and return summary grouped by project.
+ * Structure: SESSIONS_DIR/<project>/<sessionId>/<date>/chunk-NNN.jsonl
  */
 function getSessionGroups() {
   const groups = [];
-  const dates = safeReadDir(SESSIONS_DIR).sort().reverse();
+  const projects = safeReadDir(SESSIONS_DIR).sort();
 
-  for (const date of dates) {
-    const dateDir = path.join(SESSIONS_DIR, date);
-    if (!isDirectory(dateDir)) continue;
+  for (const proj of projects) {
+    const projDir = path.join(SESSIONS_DIR, proj);
+    if (!isDirectory(projDir)) continue;
 
     const sessions = [];
-    const sessionIds = safeReadDir(dateDir).sort();
+    const sessionIds = safeReadDir(projDir).sort();
     for (const sid of sessionIds) {
-      const sessionDir = path.join(dateDir, sid);
-      if (!isDirectory(sessionDir)) continue;
+      const sidDir = path.join(projDir, sid);
+      if (!isDirectory(sidDir)) continue;
 
-      let recordCount = 0;
-      const chunkFiles = safeReadDir(sessionDir)
-        .filter((f) => f.startsWith("chunk-") && f.endsWith(".jsonl"))
-        .sort();
-
-      for (const chunk of chunkFiles) {
-        const content = safeReadFile(path.join(sessionDir, chunk));
-        recordCount += content.trim().split("\n").filter(Boolean).length;
-      }
-
-      // Derive session title + workspace
-      let title = sid.slice(0, 20);
+      // Scan dates within this session
+      const dates = safeReadDir(sidDir).sort();
       let workspace = null;
-      try {
-        const metaRaw = safeReadFile(path.join(sessionDir, 'meta.json'));
-        if (metaRaw) {
-          const m = JSON.parse(metaRaw);
-          if (m.title) title = m.title;
-          if (m.cwd) workspace = m.cwd;
-        }
-      } catch {}
-      if (title === sid.slice(0, 20)) {
-        // Read first chunk to find first user message
-        const chunks = safeReadDir(sessionDir)
-          .filter((f) => f.startsWith('chunk-') && f.endsWith('.jsonl')).sort();
-        if (chunks.length > 0) {
-          const firstChunk = safeReadFile(path.join(sessionDir, chunks[0]));
-          for (const line of firstChunk.trim().split('\n').filter(Boolean)) {
-            try {
-              const rec = JSON.parse(line);
-              if (rec.type === 'user_message' && rec.content) {
-                title = rec.content.slice(0, 60).replace(/\n/g, ' ');
-                break;
-              }
-            } catch {}
-          }
-        }
-      }
+      let title = sid.slice(0, 20);
 
-      if (recordCount > 0) {
-        sessions.push({ sessionId: sid, title, recordCount, date, workspace });
+      for (const date of dates) {
+        const dateDir = path.join(sidDir, date);
+        if (!isDirectory(dateDir)) continue;
+
+        let recordCount = 0;
+        const chunkFiles = safeReadDir(dateDir)
+          .filter((f) => f.startsWith("chunk-") && f.endsWith(".jsonl"))
+          .sort();
+
+        for (const chunk of chunkFiles) {
+          const content = safeReadFile(path.join(dateDir, chunk));
+          recordCount += content.trim().split("\n").filter(Boolean).length;
+        }
+
+        // Read meta from first date dir
+        if (!workspace) {
+          try {
+            const metaRaw = safeReadFile(path.join(dateDir, 'meta.json'));
+            if (metaRaw) {
+              const m = JSON.parse(metaRaw);
+              if (m.title) title = m.title;
+              if (m.cwd) workspace = m.cwd;
+            }
+          } catch {}
+        }
+
+        if (recordCount > 0) {
+          sessions.push({ sessionId: sid, title, recordCount, date, workspace });
+        }
       }
     }
 
     if (sessions.length > 0) {
-      groups.push({ date, sessions });
+      groups.push({ date: proj, sessions });
     }
   }
 
@@ -169,24 +163,33 @@ function getSessionGroups() {
 }
 
 /**
- * Read all records for a specific session, sorted by ts ascending.
+ * Read all records for a specific session.
+ * Path: SESSIONS_DIR/<project>/<sessionId>/<date>/chunk-NNN.jsonl
  */
-function getSessionRecords(date, sessionId) {
-  const sessionDir = path.join(SESSIONS_DIR, date, sessionId);
-  if (!isDirectory(sessionDir)) return null;
+function getSessionRecords(project, sessionId) {
+  const projDir = path.join(SESSIONS_DIR, project);
+  if (!isDirectory(projDir)) return null;
+
+  const sidDir = path.join(projDir, sessionId);
+  if (!isDirectory(sidDir)) return null;
 
   const records = [];
-  const chunkFiles = safeReadDir(sessionDir)
-    .filter((f) => f.startsWith("chunk-") && f.endsWith(".jsonl"))
-    .sort();
+  const dates = safeReadDir(sidDir).sort();
 
-  for (const chunk of chunkFiles) {
-    const content = safeReadFile(path.join(sessionDir, chunk));
-    for (const line of content.trim().split("\n").filter(Boolean)) {
-      try {
-        records.push(JSON.parse(line));
-      } catch {
-        // skip malformed lines
+  for (const date of dates) {
+    const dateDir = path.join(sidDir, date);
+    if (!isDirectory(dateDir)) continue;
+
+    const chunkFiles = safeReadDir(dateDir)
+      .filter((f) => f.startsWith("chunk-") && f.endsWith(".jsonl"))
+      .sort();
+
+    for (const chunk of chunkFiles) {
+      const content = safeReadFile(path.join(dateDir, chunk));
+      for (const line of content.trim().split("\n").filter(Boolean)) {
+        try {
+          records.push(JSON.parse(line));
+        } catch {}
       }
     }
   }
@@ -201,9 +204,8 @@ function getSessionRecords(date, sessionId) {
 
   return {
     sessionId,
-    date,
+    project,
     total: records.length,
-    records,
   };
 }
 
@@ -362,14 +364,14 @@ async function handleRequest(req, res) {
       }
     }
 
-    // GET /api/sessions/:date/:sessionId
+    // GET /api/sessions/:project/:sessionId
     const sessionDetailMatch = pathname.match(
-      /^\/api\/sessions\/(\d{4}-\d{2}-\d{2})\/([^/]+)$/
+      /^\/api\/sessions\/([^/]+)\/([^/]+)$/
     );
     if (sessionDetailMatch) {
       try {
-        const [, date, sessionId] = sessionDetailMatch;
-        const result = getSessionRecords(date, sessionId);
+        const [, project, sessionId] = sessionDetailMatch;
+        const result = getSessionRecords(project, sessionId);
         if (!result) {
           sendError(res, "Session not found", 404);
           return;
