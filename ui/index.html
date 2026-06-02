@@ -144,7 +144,7 @@
 </div>
 <script>
 const API = '';
-let data = []; let currentSid = null; let currentDate = null; let currentProject = '';
+let data = []; let currentSid = null; let currentDate = null; let currentProject = ''; let activeSessionId = null;
 
 async function fetch_(path) {
   const r = await fetch(API + path);
@@ -216,39 +216,54 @@ function renderSidebar() {
   const sidebar = document.getElementById('sidebar');
   populateProjects(data);
 
-  // Group sessions by project
-  const byProject = {};
+  // Get selected project filter
+  const selected = document.getElementById('project-select').value;
+
+  // Collect all sessions flat, filtered by project
+  const all = [];
   for (const g of data) {
     for (const s of g.sessions) {
-      const p = projectName(s);
-      if (!byProject[p]) byProject[p] = [];
-      byProject[p].push({ ...s, date: g.date });
+      if (selected) {
+        const parts = (s.workspace || '').replace(/\\/g, '/').split('/');
+        const name = parts[parts.length - 1] || '';
+        if (name !== selected) continue;
+      }
+      all.push({ ...s, date: g.date });
     }
   }
 
-  const projectKeys = Object.keys(byProject).sort();
-  if (projectKeys.length === 0) {
-    sidebar.innerHTML = '<div class="empty" style="padding:30px"><h2>No sessions</h2></div>';
+  // Group by title
+  const byTitle = {};
+  for (const s of all) {
+    const key = s.title || s.sessionId.slice(0, 16);
+    if (!byTitle[key]) byTitle[key] = { title: key, sessions: [] };
+    byTitle[key].sessions.push(s);
+  }
+
+  const keys = Object.keys(byTitle);
+  if (keys.length === 0) {
+    sidebar.innerHTML = '<div class="empty" style="padding:30px"><h2>No sessions in this project</h2></div>';
     return;
   }
 
   let html = '';
-  const firstProj = projectKeys[0];
-  for (const proj of projectKeys) {
-    const open = proj === firstProj;
+  let idx = 0;
+  let currentShown = false; // only show green dot once
+  for (const key of keys) {
+    const group = byTitle[key];
+    const gid = 'g' + (idx++);
+    const sessions = group.sessions.sort((a, b) => b.date.localeCompare(a.date));
     html += `<div class="proj-group">
-      <div class="proj-header" onclick="toggleProj('${proj}')">
-        <span class="arrow ${open?'open':''}">▶</span> 📁 ${escape(proj)} <span style="margin-left:auto;font-weight:400">${byProject[proj].length}</span>
+      <div class="proj-header" onclick="toggleProj('${gid}')">
+        <span class="arrow open">▶</span> ${escape(group.title)} <span style="margin-left:auto;font-weight:400">${sessions.length}</span>
       </div>
-      <div class="proj-sessions" id="proj-${proj}" style="display:${open?'block':'none'}">`;
-    // Sort sessions by date desc, then by first record ts desc
-    const sessions = byProject[proj].sort((a, b) => b.date.localeCompare(a.date));
+      <div class="proj-sessions" id="proj-${gid}" style="display:block">`;
     for (const s of sessions) {
       const active = currentSid === s.sessionId;
-      const title = s.title || s.sessionId.slice(0, 16);
+      const isCurrent = s.sessionId === activeSessionId && !currentShown;
+      if (isCurrent) currentShown = true;
       html += `<div class="session-item ${active?'active':''}" onclick="selectSession('${s.date}','${s.sessionId}')" data-date="${s.date}" data-sid="${s.sessionId}">
-        <span class="title">${escape(title)}</span>
-        <span class="date">${s.date}</span>
+        <span class="title" style="padding-left:16px">${isCurrent ? '<span style="color:var(--green)">🟢</span> ' : ''}${s.date}</span>
         <span class="count">${s.recordCount}</span>
       </div>`;
     }
@@ -257,8 +272,8 @@ function renderSidebar() {
   sidebar.innerHTML = html;
 }
 
-function toggleProj(proj) {
-  const el = document.getElementById('proj-' + proj);
+function toggleProj(id) {
+  const el = document.getElementById('proj-' + id);
   if (!el) return;
   el.style.display = el.style.display === 'none' ? 'block' : 'none';
   const arrow = el.parentElement.querySelector('.arrow');
@@ -351,14 +366,23 @@ async function doSearch() {
 }
 
 function escape(s) { if (!s) return ''; return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function sanitizeId(s) { return (s||'').replace(/[^a-zA-Z0-9_-]/g,'_').slice(0,40); }
 
 // ── Init ──
+async function fetchActiveSession() {
+  try {
+    const r = await fetch_('/api/current-session');
+    if (r.sessionId) activeSessionId = r.sessionId;
+  } catch {}
+}
+
 document.getElementById('project-select').addEventListener('change', () => {
   currentSid = null;
   renderSidebar();
   document.getElementById('main').innerHTML = '<div class="empty"><h2>Select a session</h2></div>';
 });
 updateStatus(); setInterval(updateStatus, 10000);
+fetchActiveSession(); setInterval(fetchActiveSession, 5000);
 loadSessions();
 </script>
 </body>

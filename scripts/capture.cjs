@@ -289,6 +289,11 @@ function main() {
   }
   writeMeta(sessionId, metaPayload);
 
+  // Write current session ID
+  try {
+    fs.writeFileSync(path.join(TRACE_DIR, "current-session"), sessionId + "\n", "utf8");
+  } catch {}
+
   // Trigger checkpoint if this was a user message
   if (isUserPrompt) {
     checkCheckpoint();

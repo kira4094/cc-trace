@@ -411,6 +411,18 @@ async function handleRequest(req, res) {
       }
     }
 
+    // GET /api/current-session
+    if (pathname === "/api/current-session") {
+      try {
+        const cs = safeReadFile(path.join(TRACE_DIR, 'current-session')).trim();
+        sendJSON(res, cs ? { sessionId: cs } : { sessionId: null });
+        return;
+      } catch {
+        sendJSON(res, { sessionId: null });
+        return;
+      }
+    }
+
     // GET /api/status
     if (pathname === "/api/status") {
       try {
