@@ -30,10 +30,10 @@
   .session-item .date { font-size: 11px; color: var(--text-dim); white-space: nowrap; }
   .session-item .count { font-size: 11px; color: var(--text-dim); background: var(--badge-bg); padding: 1px 6px; border-radius: 8px; }
   .search-box { display: flex; gap: 4px; align-items: center; }
-  .search-box input { width: 120px; background: var(--search-bg); border: 1px solid var(--border); color: var(--text); padding: 4px 8px; border-radius: 4px; font-size: 12px; }
+  .search-box input { width: 120px; height: 28px; background: var(--search-bg); border: 1px solid var(--border); color: var(--text); padding: 0 8px; border-radius: 4px; font-size: 12px; box-sizing: border-box; }
   .search-box input:focus { outline: none; border-color: var(--accent); }
-  .search-box button { background: var(--accent); color: #fff; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; }
-  .theme-btn { background: transparent; border: 1px solid var(--border); color: var(--text-dim); padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 16px; line-height: 1; width: 30px; text-align: center; }
+  .search-box button { background: var(--accent); color: #fff; border: none; height: 28px; padding: 0 10px; border-radius: 4px; cursor: pointer; font-size: 12px; box-sizing: border-box; }
+  .theme-btn { background: transparent; border: 1px solid var(--border); color: var(--text-dim); height: 28px; width: 30px; padding: 0; border-radius: 4px; cursor: pointer; font-size: 14px; line-height: 28px; text-align: center; box-sizing: border-box; }
   .theme-btn:hover { color: var(--accent); border-color: var(--accent); }
   .empty { text-align: center; padding: 60px 20px; color: var(--text-dim); }
   .empty h2 { font-size: 18px; margin-bottom: 6px; }
@@ -171,7 +171,7 @@ function renderSidebar() {
     html += '<div class="proj-group" data-gid="' + gid + '"><div class="proj-header" onclick="toggleProj(\'' + gid + '\')"><span class="arrow ' + (open?'open':'') + '">▶</span> ' + esc(g.title) + ' <span style="margin-left:auto;font-weight:400">' + sessions.length + '</span></div><div class="proj-sessions" id="proj-' + gid + '" style="display:' + (open?'block':'none') + '">';
     for (const s of sessions) {
       const isCur = s.sessionId === activeSessionId && s.date === latestDate;
-      const act = currentSid === s.sessionId;
+      const act = currentSid === s.sessionId && currentDate === s.date;
       const dot = isCur ? '<span style="color:var(--green)">🟢</span> ' : '';
       html += '<div class="session-item' + (act ? ' active' : '') + '" onclick="selectSession(\'' + s.date + '\',\'' + s.sessionId + '\')" data-date="' + s.date + '" data-sid="' + s.sessionId + '"><span class="title" style="padding-left:16px">' + dot + s.date + '</span><span class="count">' + s.recordCount + '</span></div>';
     }
