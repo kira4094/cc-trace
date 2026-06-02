@@ -1,18 +1,19 @@
 {
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "kira4094",
-  "version": "1.0.0",
+  "description": "Persistent memory for Claude Code — session-level capture, keyword + AI search, Web UI",
   "owner": {
     "name": "kira4094"
-  },
-  "metadata": {
-    "description": "Persistent memory for Claude Code — session-level capture, keyword + AI search, Web UI"
   },
   "plugins": [
     {
       "name": "cc-trace",
-      "version": "0.1.0",
-      "source": "./plugin",
-      "description": "Persistent memory for Claude Code — session-level capture, keyword + AI search, Web UI"
+      "description": "Persistent memory for Claude Code — session-level capture, keyword + AI search, Web UI",
+      "source": {
+    "source": "github",
+    "repo": "kira4094/cc-trace"
+  },
+      "category": "productivity"
     }
   ]
 }
