@@ -163,33 +163,33 @@ function getSessionGroups() {
 }
 
 /**
- * Read all records for a specific session.
+ * Read all records for a specific session across ALL projects.
  * Path: SESSIONS_DIR/<project>/<sessionId>/<date>/chunk-NNN.jsonl
  */
 function getSessionRecords(project, sessionId) {
-  const projDir = path.join(SESSIONS_DIR, project);
-  if (!isDirectory(projDir)) return null;
-
-  const sidDir = path.join(projDir, sessionId);
-  if (!isDirectory(sidDir)) return null;
-
   const records = [];
-  const dates = safeReadDir(sidDir).sort();
+  let foundProject = project || '';
+  const projects = safeReadDir(SESSIONS_DIR);
 
-  for (const date of dates) {
-    const dateDir = path.join(sidDir, date);
-    if (!isDirectory(dateDir)) continue;
+  for (const proj of projects) {
+    const sidDir = path.join(SESSIONS_DIR, proj, sessionId);
+    if (!isDirectory(sidDir)) continue;
+    if (!foundProject) foundProject = proj;
 
-    const chunkFiles = safeReadDir(dateDir)
-      .filter((f) => f.startsWith("chunk-") && f.endsWith(".jsonl"))
-      .sort();
+    const dates = safeReadDir(sidDir).sort();
+    for (const date of dates) {
+      const dateDir = path.join(sidDir, date);
+      if (!isDirectory(dateDir)) continue;
 
-    for (const chunk of chunkFiles) {
-      const content = safeReadFile(path.join(dateDir, chunk));
-      for (const line of content.trim().split("\n").filter(Boolean)) {
-        try {
-          records.push(JSON.parse(line));
-        } catch {}
+      const chunkFiles = safeReadDir(dateDir)
+        .filter((f) => f.startsWith("chunk-") && f.endsWith(".jsonl"))
+        .sort();
+
+      for (const chunk of chunkFiles) {
+        const content = safeReadFile(path.join(dateDir, chunk));
+        for (const line of content.trim().split("\n").filter(Boolean)) {
+          try { records.push(JSON.parse(line)); } catch {}
+        }
       }
     }
   }
@@ -204,7 +204,7 @@ function getSessionRecords(project, sessionId) {
 
   return {
     sessionId,
-    project,
+    project: foundProject,
     total: records.length,
     records,
   };
