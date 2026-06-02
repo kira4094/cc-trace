@@ -210,7 +210,7 @@ async function selectSession(date, sid) {
       if (ws) break;
     }
     const proj = projFromWs(ws);
-    const d = await fetch_('/api/sessions/' + proj + '/' + sid);
+    const d = await fetch_('/api/sessions/' + proj + '/' + sid + '?date=' + currentDate);
     renderRecords(d);
   } catch (e) {
     document.getElementById('main').innerHTML = '<div class="empty"><h2>Error</h2><p>' + e.message + '</p></div>';
