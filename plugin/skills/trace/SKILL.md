@@ -5,4 +5,4 @@ disable-model-invocation: true
 allowed-tools: [Bash]
 ---
 
-start http://localhost:13779
+! start http://localhost:13779
