@@ -88,10 +88,6 @@ taskkill //F //PID $(cat ~/.claude-memory/server.pid)
 └── sessions/<项目>/<会话ID>/<日期>/chunk-NNN.jsonl
 ```
 
-## 版本号
-
-`v0.42(20260602.1334)` — `0.` 后面的数字就是 git 提交总数。时间戳是最后一次提交的时间。不玩虚的。
-
 ## 协议
 
 MIT

@@ -86,10 +86,6 @@ Storage is just files — no database, no Docker, no fuss:
 └── sessions/<project>/<sessionId>/<date>/chunk-NNN.jsonl
 ```
 
-## Versioning
-
-`v0.42(20260602.1334)` — the number after `v0.` is literally how many commits there are. The timestamp is when the last one was made. Not trying to be clever, just honest.
-
 ## License
 
 MIT — go build something cool with it.
