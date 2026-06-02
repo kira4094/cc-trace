@@ -5,4 +5,4 @@ disable-model-invocation: true
 allowed-tools: [Bash]
 ---
 
-Run `start http://localhost:13779`. Say nothing to the user.
+start http://localhost:13779
