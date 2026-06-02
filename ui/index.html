@@ -143,7 +143,9 @@ function renderSidebar() {
     const g = byTitle[key];
     const gid = 'g' + (idx++);
     const sessions = g.sessions.sort((a, b) => b.date.localeCompare(a.date));
-    html += '<div class="proj-group"><div class="proj-header" onclick="toggleProj(\'' + gid + '\')"><span class="arrow open">▶</span> ' + esc(g.title) + ' <span style="margin-left:auto;font-weight:400">' + sessions.length + '</span></div><div class="proj-sessions" id="proj-' + gid + '" style="display:block">';
+    const hasCur = sessions.some(s => s.sessionId === activeSessionId && !curShown);
+    const open = hasCur;
+    html += '<div class="proj-group"><div class="proj-header" onclick="toggleProj(\'' + gid + '\')"><span class="arrow ' + (open?'open':'') + '">▶</span> ' + esc(g.title) + ' <span style="margin-left:auto;font-weight:400">' + sessions.length + '</span></div><div class="proj-sessions" id="proj-' + gid + '" style="display:' + (open?'block':'none') + '">';
     for (const s of sessions) {
       const isCur = s.sessionId === activeSessionId && !curShown;
       if (isCur) curShown = true;
@@ -170,12 +172,27 @@ function selectDate(date) {
   renderSidebar();
 }
 
+function projFromWs(ws) {
+  if (!ws) return 'default';
+  const parts = ws.replace(/\\/g, '/').split('/').filter(Boolean);
+  return parts[parts.length - 1] || 'default';
+}
+
 async function selectSession(date, sid) {
   currentDate = date; currentSid = sid;
   renderSidebar();
   document.getElementById('main').innerHTML = '<div class="loading">Loading records...</div>';
   try {
-    const d = await fetch_('/api/sessions/' + date + '/' + sid);
+    // Find the workspace from data to derive project folder name
+    let ws = null;
+    for (const g of data) {
+      for (const s of g.sessions) {
+        if (s.sessionId === sid) { ws = s.workspace; break; }
+      }
+      if (ws) break;
+    }
+    const proj = projFromWs(ws);
+    const d = await fetch_('/api/sessions/' + proj + '/' + sid);
     renderRecords(d);
   } catch (e) {
     document.getElementById('main').innerHTML = '<div class="empty"><h2>Error</h2><p>' + e.message + '</p></div>';
