@@ -87,7 +87,7 @@ async function updateStatus() {
   try {
     const s = await fetch_('/api/status');
     document.getElementById('status').innerHTML = '<span style="color:var(--accent);font-weight:600">cc-trace</span> ' + s.sessionCount + ' sessions · ' + s.memoryCount + ' memories';
-    if (s.version) document.getElementById('version').textContent = 'v' + s.version;
+    if (s.version) document.getElementById('version').textContent = s.version;
   } catch {}
 }
 
