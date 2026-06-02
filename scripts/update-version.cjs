@@ -78,7 +78,7 @@ fs.writeFileSync(VERSION_FILE, JSON.stringify(data, null, 2) + "\n");
 for (const f of PLUGIN_JSONS) {
   try {
     const pkg = JSON.parse(fs.readFileSync(f, "utf8"));
-    if (pkg.version !== ver) {
+    if (pkg.version !== full) {
       pkg.version = full;
       fs.writeFileSync(f, JSON.stringify(pkg, null, 2) + "\n");
     }
