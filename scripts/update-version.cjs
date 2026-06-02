@@ -44,7 +44,7 @@ const currentSha = exec("git rev-parse HEAD");
 
 if (log) {
   const lines = log.split("\n").filter(Boolean);
-  let hasBreaking = false, hasFeat = false, hasMeaningful = false;
+  let hasBreaking = false, hasFeat = false, meaningfulCount = 0;
 
   for (const msg of lines) {
     const lower = msg.toLowerCase();
@@ -52,19 +52,19 @@ if (log) {
     // Skip docs-only / chore / cleanup — no version bump for these
     if (lower.startsWith("docs:") || lower.startsWith("chore:") || lower.startsWith("cleanup:")) continue;
 
-    hasMeaningful = true;
+    meaningfulCount++;
 
     if (lower.includes("breaking") || lower.includes("restructure") || lower.includes("rewrite")) {
       hasBreaking = true;
     }
-    if (lower.startsWith("feat") || lower.includes("new") || lower.includes("redesign") || lower.includes("add ")) {
+    if (lower.startsWith("feat") || lower.startsWith("add ") || lower.startsWith("redesign")) {
       hasFeat = true;
     }
   }
 
   if (hasBreaking) { major++; minor = 0; patch = 0; }
   else if (hasFeat) { minor++; patch = 0; }
-  else if (hasMeaningful) { patch++; }
+  else { patch += meaningfulCount; }
 }
 
 const build = exec("git log -1 --format=%cd --date=format:%Y%m%d.%H%M") || "00000000.0000";
