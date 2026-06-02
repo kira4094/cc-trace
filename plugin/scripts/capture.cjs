@@ -69,6 +69,12 @@ function todayStr() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function projectName(cwd) {
+  if (!cwd) return "default";
+  const parts = path.resolve(cwd).replace(/\\/g, "/").split("/").filter(Boolean);
+  return parts[parts.length - 1] || "default";
+}
+
 /** Extract session ID from transcript_path: ".../transcripts/abc123.jsonl" → "abc123" */
 function sessionIdFromTranscript(transcriptPath) {
   if (!transcriptPath) return null;
@@ -78,9 +84,17 @@ function sessionIdFromTranscript(transcriptPath) {
 }
 
 /** Get or create the current chunk path for a session */
-function getChunkPath(sessionId) {
+const _projectCache = {};
+function getProjectForCwd(cwd) {
+  if (_projectCache[cwd]) return _projectCache[cwd];
+  _projectCache[cwd] = projectName(cwd);
+  return _projectCache[cwd];
+}
+
+function getChunkPath(sessionId, cwd) {
   const date = todayStr();
-  const sessionDir = path.join(SESSIONS_DIR, date, sessionId);
+  const proj = getProjectForCwd(cwd);
+  const sessionDir = path.join(SESSIONS_DIR, proj, sessionId, date);
   ensureDir(sessionDir);
 
   // Find latest chunk
@@ -149,9 +163,10 @@ function dedupLastTwo(sessionDir, newRecord) {
 }
 
 /** Write meta.json for a session */
-function writeMeta(sessionId, meta) {
+function writeMeta(sessionId, meta, cwd) {
   const date = todayStr();
-  const sessionDir = path.join(SESSIONS_DIR, date, sessionId);
+  const proj = getProjectForCwd(cwd || process.cwd());
+  const sessionDir = path.join(SESSIONS_DIR, proj, sessionId, date);
   ensureDir(sessionDir);
   const metaPath = path.join(sessionDir, "meta.json");
   try {
@@ -224,7 +239,9 @@ function main() {
   if (!sessionId) process.exit(0);
 
   const date = todayStr();
-  const sessionDir = path.join(SESSIONS_DIR, date, sessionId);
+  const cwd = process.cwd();
+  const proj = getProjectForCwd(cwd);
+  const sessionDir = path.join(SESSIONS_DIR, proj, sessionId, date);
   const ts = new Date().toISOString();
 
   // Detect event type from payload
@@ -267,7 +284,7 @@ function main() {
   if (dedupLastTwo(sessionDir, record)) process.exit(0);
 
   // Get chunk path and append
-  const chunkPath = getChunkPath(sessionId);
+  const chunkPath = getChunkPath(sessionId, cwd);
   ensureDir(path.dirname(chunkPath));
 
   try {
@@ -287,7 +304,12 @@ function main() {
   if (isUserPrompt && record.content) {
     metaPayload.title = record.content.slice(0, 60).replace(/\n/g, ' ');
   }
-  writeMeta(sessionId, metaPayload);
+  writeMeta(sessionId, metaPayload, cwd);
+
+  // Write current session ID
+  try {
+    fs.writeFileSync(path.join(TRACE_DIR, "current-session"), sessionId + "\n", "utf8");
+  } catch {}
 
   // Trigger checkpoint if this was a user message
   if (isUserPrompt) {
