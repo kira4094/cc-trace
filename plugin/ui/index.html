@@ -227,19 +227,58 @@ async function selectSession(date, sid) {
   }
 }
 
+const TOOL_COLORS = {
+  Bash: '#d29922', Read: '#58a6ff', Write: '#3fb950', Edit: '#3fb950',
+  WebSearch: '#bc8cff', WebFetch: '#bc8cff', Grep: '#f0883e', Glob: '#f0883e',
+  default: '#8b949e'
+};
+
 function renderRecords(d) {
   const main = document.getElementById('main');
   if (!d || !d.records || d.records.length === 0) { main.innerHTML = '<div class="empty"><h2>No records</h2></div>'; return; }
   const title = (d.records.find(r => r.type === 'user_message')?.content || d.sessionId).slice(0, 60).replace(/\n/g, ' ');
   let html = '<div class="main-header">' + esc(title) + '</div><div class="main-meta">' + d.total + ' records</div>';
-  for (const r of d.records) {
+
+  let i = 0;
+  while (i < d.records.length) {
+    const r = d.records[i];
     const type = r.type || 'unknown';
     const time = r.ts ? new Date(r.ts).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) : '';
-    html += '<div class="record ' + type + '"><div class="meta">' + time + ' · ' + type;
-    if (r.toolName) html += ' · <span style="color:#d29922;font-weight:600">' + esc(r.toolName) + '</span>';
-    html += '</div>';
-    if (r.content) html += '<div class="content">' + esc(r.content.slice(0,2000)) + '</div>';
-    html += '</div>';
+
+    if (type === 'tool_use') {
+      // Group consecutive tool_use records
+      const group = [];
+      while (i < d.records.length && d.records[i].type === 'tool_use') {
+        group.push(d.records[i]);
+        i++;
+      }
+      // Count by tool name
+      const counts = {};
+      const names = [];
+      for (const t of group) {
+        const n = t.toolName || 'unknown';
+        if (!counts[n]) { counts[n] = 0; names.push(n); }
+        counts[n]++;
+      }
+      const tools = names.map(n => {
+        const c = TOOL_COLORS[n] || TOOL_COLORS.default;
+        const label = counts[n] > 1 ? n + '(' + counts[n] + ')' : n;
+        return '<span style="color:' + c + ';font-weight:600">' + label + '</span>';
+      });
+      const ts = group[0].ts;
+      const grpTime = ts ? new Date(ts).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) : '';
+      html += '<div class="record tool_use"><div class="meta">' + grpTime + ' · ' + tools.join(' ') + '</div></div>';
+    } else {
+      html += '<div class="record ' + type + '"><div class="meta">' + time + ' · ' + type;
+      if (r.toolName) {
+        const c = TOOL_COLORS[r.toolName] || TOOL_COLORS.default;
+        html += ' · <span style="color:' + c + ';font-weight:600">' + esc(r.toolName) + '</span>';
+      }
+      html += '</div>';
+      if (r.content) html += '<div class="content">' + esc(r.content.slice(0,2000)) + '</div>';
+      html += '</div>';
+      i++;
+    }
   }
   main.innerHTML = html;
 }
@@ -280,7 +319,17 @@ updateStatus();
 setInterval(updateStatus, 10000);
 fetchActiveSession();
 setInterval(fetchActiveSession, 5000);
-loadSessions();
+loadSessions().then(() => {
+  if (activeSessionId && !currentSid) {
+    let latestDate = '';
+    for (const g of data) {
+      for (const s of g.sessions) {
+        if (s.sessionId === activeSessionId && s.date > latestDate) latestDate = s.date;
+      }
+    }
+    if (latestDate) selectSession(latestDate, activeSessionId);
+  }
+});
 </script>
 </body>
 </html>
