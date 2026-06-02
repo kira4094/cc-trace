@@ -126,13 +126,15 @@ function getSessionGroups() {
         recordCount += content.trim().split("\n").filter(Boolean).length;
       }
 
-      // Derive session title
+      // Derive session title + workspace
       let title = sid.slice(0, 20);
+      let workspace = null;
       try {
-        const meta = safeReadFile(path.join(sessionDir, 'meta.json'));
-        if (meta) {
-          const m = JSON.parse(meta);
+        const metaRaw = safeReadFile(path.join(sessionDir, 'meta.json'));
+        if (metaRaw) {
+          const m = JSON.parse(metaRaw);
           if (m.title) title = m.title;
+          if (m.cwd) workspace = m.cwd;
         }
       } catch {}
       if (title === sid.slice(0, 20)) {
@@ -154,7 +156,7 @@ function getSessionGroups() {
       }
 
       if (recordCount > 0) {
-        sessions.push({ sessionId: sid, title, recordCount, date });
+        sessions.push({ sessionId: sid, title, recordCount, date, workspace });
       }
     }
 

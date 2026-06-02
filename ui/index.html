@@ -25,9 +25,11 @@
   .topbar .spacer { flex: 1; }
   .topbar select {
     background: var(--bg); color: var(--text); border: 1px solid var(--border);
-    padding: 4px 10px; border-radius: 6px; font-size: 13px; cursor: pointer;
+    padding: 6px 14px; border-radius: 6px; font-size: 13px; cursor: pointer;
+    min-width: 200px; max-width: 400px;
   }
   .topbar select:focus { outline: none; border-color: var(--accent); }
+  .topbar select option { padding: 4px; }
   /* ── Breadcrumb ── */
   .breadcrumb {
     display: flex; align-items: center; gap: 6px; padding: 6px 20px;
@@ -56,8 +58,17 @@
   .date-header:hover { background: rgba(255,255,255,0.03); }
   .date-header .arrow { font-size: 10px; transition: transform 0.15s; }
   .date-header .arrow.open { transform: rotate(90deg); }
+  .proj-group { border-bottom: 1px solid var(--border); }
+  .proj-header {
+    display: flex; align-items: center; gap: 6px; padding: 8px 14px;
+    font-size: 12px; font-weight: 600; color: var(--accent);
+    cursor: pointer; user-select: none;
+  }
+  .proj-header:hover { background: rgba(255,255,255,0.03); }
+  .proj-header .arrow { font-size: 10px; transition: transform 0.15s; }
+  .proj-header .arrow.open { transform: rotate(90deg); }
   .session-item {
-    display: flex; align-items: center; gap: 8px; padding: 7px 14px 7px 28px;
+    display: flex; align-items: center; gap: 8px; padding: 6px 14px 6px 28px;
     cursor: pointer; border-left: 2px solid transparent; font-size: 13px;
   }
   .session-item:hover { background: rgba(255,255,255,0.04); }
@@ -65,6 +76,9 @@
     background: rgba(88,166,255,0.1); border-left-color: var(--accent);
   }
   .session-item .title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .session-item .date {
+    font-size: 11px; color: var(--text-dim); white-space: nowrap;
+  }
   .session-item .count {
     font-size: 11px; color: var(--text-dim); background: rgba(255,255,255,0.05);
     padding: 1px 6px; border-radius: 8px;
@@ -113,7 +127,9 @@
   <h1>🔍 cc-trace</h1>
   <div class="spacer"></div>
   <span id="status" style="font-size:12px;color:var(--text-dim)">—</span>
-  <select id="project-select" style="display:none"></select>
+  <select id="project-select">
+    <option value="">All projects</option>
+  </select>
 </div>
 <div class="search-bar">
   <input id="search-input" placeholder="Search past conversations..." onkeydown="if(event.key==='Enter')doSearch()">
@@ -128,7 +144,7 @@
 </div>
 <script>
 const API = '';
-let data = []; let currentSid = null; let currentDate = null;
+let data = []; let currentSid = null; let currentDate = null; let currentProject = '';
 
 async function fetch_(path) {
   const r = await fetch(API + path);
@@ -155,40 +171,94 @@ async function loadSessions() {
   }
 }
 
+function populateProjects(allData) {
+  const sel = document.getElementById('project-select');
+  const projects = new Set();
+  for (const g of allData) {
+    for (const s of g.sessions) {
+      if (s.workspace) {
+        // Extract project name from workspace path
+        const parts = s.workspace.replace(/\\/g, '/').split('/');
+        const name = parts[parts.length - 1] || s.workspace;
+        projects.add(name);
+      }
+    }
+  }
+  const current = sel.value;
+  sel.innerHTML = '<option value="">All projects</option>';
+  for (const p of [...projects].sort()) {
+    sel.innerHTML += `<option value="${escape(p)}">${escape(p)}</option>`;
+  }
+  if (current) sel.value = current;
+}
+
+function filterByProject(allData) {
+  const proj = document.getElementById('project-select').value;
+  if (!proj) return allData;
+  return allData.map(g => {
+    const filtered = g.sessions.filter(s => {
+      if (!s.workspace) return false;
+      const parts = s.workspace.replace(/\\/g, '/').split('/');
+      const name = parts[parts.length - 1];
+      return name === proj;
+    });
+    return filtered.length > 0 ? { date: g.date, sessions: filtered } : null;
+  }).filter(Boolean);
+}
+
+function projectName(session) {
+  if (!session.workspace) return 'Other';
+  const parts = session.workspace.replace(/\\/g, '/').split('/');
+  return parts[parts.length - 1] || 'Other';
+}
+
 function renderSidebar() {
   const sidebar = document.getElementById('sidebar');
-  if (!data || data.length === 0) {
-    sidebar.innerHTML = '<div class="empty" style="padding:30px"><h2>No sessions</h2><p>Start a conversation to record</p></div>';
+  populateProjects(data);
+
+  // Group sessions by project
+  const byProject = {};
+  for (const g of data) {
+    for (const s of g.sessions) {
+      const p = projectName(s);
+      if (!byProject[p]) byProject[p] = [];
+      byProject[p].push({ ...s, date: g.date });
+    }
+  }
+
+  const projectKeys = Object.keys(byProject).sort();
+  if (projectKeys.length === 0) {
+    sidebar.innerHTML = '<div class="empty" style="padding:30px"><h2>No sessions</h2></div>';
     return;
   }
-  // Also populate project dropdown
-  const sel = document.getElementById('project-select');
-  sel.style.display = 'block';
-  // Build HTML
+
   let html = '';
-  for (const group of data) {
-    const isOpen = !currentDate || group.date === currentDate;
-    html += `<div class="date-group">
-      <div class="date-header" onclick="toggleDate('${group.date}')">
-        <span class="arrow ${isOpen?'open':''}">▶</span> ${group.date} <span style="margin-left:auto;font-weight:400">${group.sessions.length}</span>
+  const firstProj = projectKeys[0];
+  for (const proj of projectKeys) {
+    const open = proj === firstProj;
+    html += `<div class="proj-group">
+      <div class="proj-header" onclick="toggleProj('${proj}')">
+        <span class="arrow ${open?'open':''}">▶</span> 📁 ${escape(proj)} <span style="margin-left:auto;font-weight:400">${byProject[proj].length}</span>
       </div>
-      <div class="date-sessions" id="date-${group.date}" style="display:${isOpen?'block':'none'}">`;
-    for (const s of group.sessions) {
+      <div class="proj-sessions" id="proj-${proj}" style="display:${open?'block':'none'}">`;
+    // Sort sessions by date desc, then by first record ts desc
+    const sessions = byProject[proj].sort((a, b) => b.date.localeCompare(a.date));
+    for (const s of sessions) {
       const active = currentSid === s.sessionId;
       const title = s.title || s.sessionId.slice(0, 16);
-      html += `<div class="session-item ${active?'active':''}" onclick="selectSession('${group.date}','${s.sessionId}')" data-date="${group.date}" data-sid="${s.sessionId}">
+      html += `<div class="session-item ${active?'active':''}" onclick="selectSession('${s.date}','${s.sessionId}')" data-date="${s.date}" data-sid="${s.sessionId}">
         <span class="title">${escape(title)}</span>
+        <span class="date">${s.date}</span>
         <span class="count">${s.recordCount}</span>
       </div>`;
     }
     html += `</div></div>`;
   }
   sidebar.innerHTML = html;
-  updateBreadcrumb();
 }
 
-function toggleDate(date) {
-  const el = document.getElementById('date-' + date);
+function toggleProj(proj) {
+  const el = document.getElementById('proj-' + proj);
   if (!el) return;
   el.style.display = el.style.display === 'none' ? 'block' : 'none';
   const arrow = el.parentElement.querySelector('.arrow');
@@ -283,6 +353,11 @@ async function doSearch() {
 function escape(s) { if (!s) return ''; return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 // ── Init ──
+document.getElementById('project-select').addEventListener('change', () => {
+  currentSid = null;
+  renderSidebar();
+  document.getElementById('main').innerHTML = '<div class="empty"><h2>Select a session</h2></div>';
+});
 updateStatus(); setInterval(updateStatus, 10000);
 loadSessions();
 </script>
