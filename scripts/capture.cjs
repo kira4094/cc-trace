@@ -284,7 +284,6 @@ function main() {
   if (dedupLastTwo(sessionDir, record)) process.exit(0);
 
   // Get chunk path and append
-  const cwd = process.cwd();
   const chunkPath = getChunkPath(sessionId, cwd);
   ensureDir(path.dirname(chunkPath));
 
@@ -318,4 +317,4 @@ function main() {
   }
 }
 
-try { main(); } catch (e) { /* silent exit */ }
+main();
