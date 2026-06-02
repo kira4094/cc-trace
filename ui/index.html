@@ -280,7 +280,17 @@ updateStatus();
 setInterval(updateStatus, 10000);
 fetchActiveSession();
 setInterval(fetchActiveSession, 5000);
-loadSessions();
+loadSessions().then(() => {
+  if (activeSessionId && !currentSid) {
+    let latestDate = '';
+    for (const g of data) {
+      for (const s of g.sessions) {
+        if (s.sessionId === activeSessionId && s.date > latestDate) latestDate = s.date;
+      }
+    }
+    if (latestDate) selectSession(latestDate, activeSessionId);
+  }
+});
 </script>
 </body>
 </html>
