@@ -318,4 +318,4 @@ function main() {
   }
 }
 
-main();
+try { main(); } catch (e) { /* silent exit */ }
