@@ -1,75 +1,62 @@
 # cc-trace 🔍
 
-> **Vibe Coding** · Claude Code 持久化记忆系统
+> **Vibe Coding** · Claude Code 长记性了。
 
 ![version](https://img.shields.io/badge/version-v1.0.1(20260602.1350)-FF5701)
 
-会话级记录、关键词 + AI 搜索、Web UI。零依赖。
+聊过的每句话、调过的每个工具、做过的每个决定——自动存好，随时能翻出来。
 
 ```
 All projects ▾
-▶ 🟢 设计讨论 (当前)
+▶ 🟢 session-01 (当前)
   ├── 2026-06-02
   └── 2026-06-01
-▶ 重构计划
+▶ session-02
   └── 2026-06-01
 ```
 
-[English](README.md)
+[English](README.md) | [`http://localhost:13779`](http://localhost:13779)
 
-## 特性
+## 它能干嘛
 
-- **自动记录** — 每条消息和工具调用自动保存
-- **双通道搜索** — 关键词（免费、毫秒级）+ AI 语义兜底
-- **跨会话记忆** — `/compact` 不丢失上下文
-- **Web UI** — 可视化浏览、搜索、项目筛选 `http://localhost:13779`
-- **主题切换** — ☀ 浅色（Claude 配色）/ ☽ 深色
-- **Claude Code 插件** — 不修改 settings.json
-- **自动版本号** — 从 git 提交语义化生成
+- **自动记** — 消息和工具调用全部保留，不用配置
+- **跨会话** — `/compact` 清不掉记忆
+- **随便搜** — 关键词秒出结果，关键词不够 AI 来凑
+- **有界面** — `http://localhost:13779`，浅色深色随便切
+- **不添乱** — 插件安装，不动 settings.json
 
-## 安装
-
-需要**代理**才能 clone GitHub。
+## 装一个
 
 ```bash
-# 清旧的（重装时）
-rm -rf ~/.claude/plugins/marketplaces/kira4094
-rm -rf ~/.claude/plugins/cache/kira4094
-```
-
-进 Claude Code：
-
-```
+# 在 Claude Code 里敲：
 /plugin marketplace add kira4094/cc-trace
 /plugin install cc-trace
 /reload-plugins
 ```
 
-**重启 Claude Code** — hooks 会自动拉起 Web UI 服务器。
+**重启 Claude Code**，完事。
 
-## 卸载
+## 卸一个
 
 ```bash
 # 在 Claude Code 里：
 /plugin uninstall cc-trace
 
-# 然后在终端：
+# 终端里：
 rm -rf ~/.claude/plugins/marketplaces/kira4094
 rm -rf ~/.claude/plugins/cache/kira4094
-rm -rf ~/.claude-memory          # 可选：删除所有数据
+rm -rf ~/.claude-memory          # 想清楚，这步删所有记忆
 ```
 
 ## 斜杠命令
 
-| 命令 | 作用 |
-|------|------|
-| `/cc-trace:trace` | 在浏览器打开 Web UI |
-| `/cc-trace:trace-search` | 搜索历史对话 |
-| `/cc-trace:trace-status` | 查看服务器状态 |
+| 命令 | 干啥的 |
+|------|--------|
+| `/cc-trace:trace` | 打开 Web UI |
+| `/cc-trace:trace-search` | 搜历史记录 |
+| `/cc-trace:trace-status` | 看服务器活着没 |
 
-## 杀死服务器
-
-如果 Web UI 卡住需要重启：
+## 服务器闹脾气了
 
 **PowerShell：**
 ```powershell
@@ -81,55 +68,30 @@ taskkill /F /PID (Get-Content $env:USERPROFILE\.claude-memory\server.pid)
 taskkill //F //PID $(cat ~/.claude-memory/server.pid)
 ```
 
-杀死后发条消息给 Claude Code 就会自动重启。
+杀了就行，下条消息 hook 会自动再拉起来。
 
-## 存储结构
+## 原理
+
+```
+消息或工具调用
+  ├── hook 捕获 → 存成 JSONL 文件
+  ├── 会话结束 → AI 总结 → 存成 markdown
+  ├── 新会话开始 → 最近的记忆注入提示词
+  ├── Setup hook → 启动 Web UI（端口 13779）
+  └── 你问"我们聊过这个吗？" → curl /api/search?q=...
+```
+
+没有数据库，没有 Docker，全靠文件系统：
 
 ```
 ~/.claude-memory/
-├── sessions/
-│   ├── claude-trace/          ← 按项目分组（从 cwd 派生）
-│   │   └── <sessionId>/
-│   │       ├── 2026-06-01/
-│   │       │   ├── chunk-000.jsonl
-│   │       │   └── meta.json
-│   │       └── 2026-06-02/
-│   └── kiray/
-└── memory/
-    ├── MEMORY.md              ← 记忆索引
-    └── *.md                   ← AI 摘要
-```
-
-## 架构
-
-```
-消息 / 工具调用
-  ├── PostToolUse hook → capture.cjs → sessions/<项目>/<会话ID>/<日期>/
-  ├── Stop hook → summarize.cjs → DeepSeek AI → memory/
-  ├── SessionStart → inject.cjs → 近期记忆 → CLAUDE.md
-  ├── Setup hook → server-launcher.cjs → Web UI（端口 13779）
-  └── 用户问起过去 → curl /api/search → 结果
+└── sessions/<项目>/<会话ID>/<日期>/chunk-NNN.jsonl
 ```
 
 ## 版本号
 
-`v<主版本>.<次版本>.<补丁>(<YYYYMMDD.HHmm>)` — git pre-commit hook 自动生成。
-
-| 提交含有关键词 | 版本变化 |
-|---------------|:--------:|
-| `BREAKING` / `restructure` / `rewrite` | 主版本 +1 |
-| `feat:` / `add` / `new` / `redesign` | 次版本 +1 |
-| `fix:` / 其他 | 补丁 +1 |
-
-## 开发
-
-```bash
-git clone https://github.com/kira4094/cc-trace.git
-cd cc-trace
-# 安装 pre-commit hook（自动版本号）：
-node scripts/update-version.cjs
-```
+`v0.42(20260602.1334)` — `0.` 后面的数字就是 git 提交总数。时间戳是最后一次提交的时间。不玩虚的。
 
 ## 协议
 
-MIT
+MIT — 拿去玩。
