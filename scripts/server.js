@@ -38,7 +38,11 @@ const MIME_TYPES = {
 };
 
 const SERVER_START = Date.now();
-const VERSION = "0.1.0";
+const VERSION = (() => {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'version.json'), 'utf8')).full || "0.0.0";
+  } catch { return "0.0.0"; }
+})();
 
 // ── Helpers ─────────────────────────────────────────────────────────────
 
