@@ -9,7 +9,7 @@
     {
       "name": "cc-trace",
       "description": "Persistent memory for Claude Code — session-level capture, keyword + AI search, Web UI",
-      "source": ".",
+      "source": "./plugin",
       "category": "productivity"
     }
   ]
