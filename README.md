@@ -28,7 +28,7 @@ All projects ▾
 ```bash
 # Inside Claude Code:
 /plugin marketplace add kira4094/cc-trace
-/plugin install cc-trace@cc-trace
+/plugin install cc-trace              # or: cc-trace@cc-trace
 /reload-plugins
 ```
 

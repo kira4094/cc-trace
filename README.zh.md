@@ -30,7 +30,7 @@ All projects ▾
 ```bash
 # 在 Claude Code 里敲：
 /plugin marketplace add kira4094/cc-trace
-/plugin install cc-trace@cc-trace
+/plugin install cc-trace              # 或: cc-trace@cc-trace
 /reload-plugins
 ```
 
