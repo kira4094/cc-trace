@@ -2,8 +2,6 @@
 
 > **Vibe Coding** · Claude Code just got a memory.
 
-![version](https://img.shields.io/badge/version-v1.0.1(20260602.1350)-FF5701)
-
 Every conversation, every tool call, every decision — automatically saved, searchable, and ready when you are.
 
 ```

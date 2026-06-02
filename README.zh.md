@@ -94,4 +94,4 @@ taskkill //F //PID $(cat ~/.claude-memory/server.pid)
 
 ## 协议
 
-MIT — 拿去玩。
+MIT
