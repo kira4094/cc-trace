@@ -1,6 +1,6 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
-  "name": "kira4094",
+  "name": "cc-trace",
   "description": "Persistent memory for Claude Code — session-level capture, keyword + AI search, Web UI",
   "owner": {
     "name": "kira4094"
