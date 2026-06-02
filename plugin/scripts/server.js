@@ -38,6 +38,7 @@ const MIME_TYPES = {
 };
 
 const SERVER_START = Date.now();
+const VERSION = "0.1.0";
 
 // ── Helpers ─────────────────────────────────────────────────────────────
 
@@ -166,7 +167,7 @@ function getSessionGroups() {
  * Read all records for a specific session across ALL projects.
  * Path: SESSIONS_DIR/<project>/<sessionId>/<date>/chunk-NNN.jsonl
  */
-function getSessionRecords(project, sessionId) {
+function getSessionRecords(project, sessionId, filterDate) {
   const records = [];
   let foundProject = project || '';
   const projects = safeReadDir(SESSIONS_DIR);
@@ -178,6 +179,7 @@ function getSessionRecords(project, sessionId) {
 
     const dates = safeReadDir(sidDir).sort();
     for (const date of dates) {
+      if (filterDate && date !== filterDate) continue;
       const dateDir = path.join(sidDir, date);
       if (!isDirectory(dateDir)) continue;
 
@@ -244,6 +246,7 @@ function getStatus() {
     uptime: Math.floor((Date.now() - SERVER_START) / 1000),
     sessionCount,
     memoryCount: memoryEntries.length,
+    version: VERSION,
     startedAt: new Date(SERVER_START).toISOString(),
   };
 }
@@ -372,7 +375,8 @@ async function handleRequest(req, res) {
     if (sessionDetailMatch) {
       try {
         const [, project, sessionId] = sessionDetailMatch;
-        const result = getSessionRecords(project, sessionId);
+        const filterDate = queryParams.get("date") || "";
+        const result = getSessionRecords(project, sessionId, filterDate);
         if (!result) {
           sendError(res, "Session not found", 404);
           return;

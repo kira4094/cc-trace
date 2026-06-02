@@ -38,6 +38,7 @@ const MIME_TYPES = {
 };
 
 const SERVER_START = Date.now();
+const VERSION = "0.1.0";
 
 // ── Helpers ─────────────────────────────────────────────────────────────
 
@@ -245,6 +246,7 @@ function getStatus() {
     uptime: Math.floor((Date.now() - SERVER_START) / 1000),
     sessionCount,
     memoryCount: memoryEntries.length,
+    version: VERSION,
     startedAt: new Date(SERVER_START).toISOString(),
   };
 }
