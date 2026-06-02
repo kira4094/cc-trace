@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>cc-trace</title>
 <style>
-  :root { --bg: #0d1117; --surface: #161b22; --border: #30363d; --text: #e6edf3; --text-dim: #8b949e; --accent: #58a6ff; --green: #3fb950; }
+  :root { --bg: #0F1217; --surface: #1A1D24; --border: #2D3139; --text: #EDEDED; --text-dim: #8B949E; --accent: #FF5701; --green: #16A34A; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; height: 100vh; display: flex; flex-direction: column; }
   .topbar { display: flex; align-items: center; padding: 10px 20px; background: var(--surface); border-bottom: 1px solid var(--border); gap: 12px; }
@@ -36,7 +36,7 @@
   .empty h2 { font-size: 18px; margin-bottom: 6px; }
   .loading { text-align: center; padding: 40px; color: var(--text-dim); }
   .record { padding: 10px 14px; margin-bottom: 6px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); font-size: 13px; }
-  .record.tool_use { border-left: 3px solid #d29922; }
+  .record.tool_use { border-left: 3px solid #D97706; }
   .record.user_message { border-left: 3px solid var(--accent); }
   .record.assistant_message { border-left: 3px solid var(--green); }
   .record .meta { font-size: 11px; color: var(--text-dim); margin-bottom: 2px; }
@@ -81,7 +81,7 @@ async function fetch_(path) {
 async function updateStatus() {
   try {
     const s = await fetch_('/api/status');
-    document.getElementById('status').innerHTML = '<span style="color:var(--accent)">cc-trace</span> ' + s.sessionCount + ' sessions · ' + s.memoryCount + ' memories';
+    document.getElementById('status').innerHTML = '<span style="color:var(--accent);font-weight:600">cc-trace</span> ' + s.sessionCount + ' sessions · ' + s.memoryCount + ' memories';
   } catch {}
 }
 
@@ -228,9 +228,9 @@ async function selectSession(date, sid) {
 }
 
 const TOOL_COLORS = {
-  Bash: '#d29922', Read: '#58a6ff', Write: '#3fb950', Edit: '#3fb950',
-  WebSearch: '#bc8cff', WebFetch: '#bc8cff', Grep: '#f0883e', Glob: '#f0883e',
-  default: '#8b949e'
+  Bash: '#D97706', Read: '#FF5701', Write: '#16A34A', Edit: '#16A34A',
+  WebSearch: '#A855F7', WebFetch: '#A855F7', Grep: '#F97316', Glob: '#F97316',
+  default: '#8B949E'
 };
 
 function renderRecords(d) {
