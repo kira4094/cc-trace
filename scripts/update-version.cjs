@@ -15,6 +15,10 @@ const { execSync } = require("child_process");
 
 const ROOT = path.resolve(__dirname, "..");
 const VERSION_FILE = path.join(ROOT, "version.json");
+const PLUGIN_JSONS = [
+  path.join(ROOT, ".claude-plugin", "plugin.json"),
+  path.join(ROOT, "plugin", ".claude-plugin", "plugin.json"),
+];
 
 function exec(cmd) {
   try { return execSync(cmd, { cwd: ROOT, encoding: "utf8", timeout: 5000 }).trim(); } catch { return ""; }
@@ -63,4 +67,16 @@ const full = `v${ver}(${build})`;
 
 const data = { version: ver, build, full, sha: currentSha };
 fs.writeFileSync(VERSION_FILE, JSON.stringify(data, null, 2) + "\n");
+
+// Sync version into plugin.json files so marketplace displays correct version
+for (const f of PLUGIN_JSONS) {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(f, "utf8"));
+    if (pkg.version !== ver) {
+      pkg.version = ver;
+      fs.writeFileSync(f, JSON.stringify(pkg, null, 2) + "\n");
+    }
+  } catch {}
+}
+
 console.log(`[version] ${full}`);

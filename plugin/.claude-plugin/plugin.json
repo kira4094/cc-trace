@@ -1,8 +1,10 @@
 {
   "name": "cc-trace",
-  "version": "0.1.0",
+  "version": "1.0.8",
   "description": "Persistent memory for Claude Code — session-level capture, keyword + AI search, Web UI",
-  "author": { "name": "kira4094" },
+  "author": {
+    "name": "kira4094"
+  },
   "repository": "https://github.com/kira4094/cc-trace",
   "license": "MIT"
 }
