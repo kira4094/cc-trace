@@ -28,7 +28,7 @@ All projects ▾
 ```bash
 # Inside Claude Code:
 /plugin marketplace add kira4094/cc-trace
-/plugin install cc-trace
+/plugin install cc-trace@cc-trace
 /reload-plugins
 ```
 
@@ -41,8 +41,8 @@ Then **restart Claude Code**. That's it.
 /plugin uninstall cc-trace
 
 # In terminal:
-rm -rf ~/.claude/plugins/marketplaces/kira4094
-rm -rf ~/.claude/plugins/cache/kira4094
+rm -rf ~/.claude/plugins/marketplaces/cc-trace
+rm -rf ~/.claude/plugins/cache/cc-trace
 rm -rf ~/.claude-memory          # say goodbye to all memories
 ```
 
