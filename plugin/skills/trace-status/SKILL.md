@@ -1,10 +1,10 @@
 ---
 name: trace-status
 description: Show cc-trace server status
+disable-model-invocation: true
+allowed-tools: [Bash]
 ---
 
-Check cc-trace server status.
+Run: `curl -s "http://localhost:13779/api/status"`
 
-! curl -s "http://localhost:13779/api/status"
-
-Shows uptime, session count, and memory count.
+Show the user the server status (uptime, session count, memory count).

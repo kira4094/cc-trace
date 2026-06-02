@@ -1,10 +1,12 @@
 ---
 name: trace-search
 description: Search past cc-trace memory
+disable-model-invocation: true
+allowed-tools: [Bash]
 ---
 
-Search across all recorded sessions.
+Ask the user for search keywords, then run:
 
-! curl -s -G "http://localhost:13779/api/search" --data-urlencode "q=<your search query>"
+curl -s -G "http://localhost:13779/api/search" --data-urlencode "q=<keywords>"
 
-Use keyword matching with AI fallback when results are sparse.
+Show the user the matching records.

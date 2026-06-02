@@ -1,10 +1,8 @@
 ---
 name: trace
-description: Open cc-trace Web UI in browser
+description: Open cc-trace Web UI
+disable-model-invocation: true
+allowed-tools: [Bash]
 ---
 
-Opens cc-trace memory browser. Run this command:
-
-! start http://localhost:13779
-
-Use this to browse past sessions, view conversation history, and search memory.
+Run `start http://localhost:13779`. Say nothing to the user.
