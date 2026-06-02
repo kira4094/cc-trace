@@ -127,7 +127,7 @@ function renderSidebar() {
         const name = (s.workspace || '').replace(/\\/g, '/').split('/').pop() || '';
         if (name !== selProj) continue;
       }
-      all.push({ ...s, date: g.date });
+      all.push(s);
     }
   }
   const byTitle = {};

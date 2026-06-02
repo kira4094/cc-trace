@@ -155,7 +155,7 @@ function getSessionGroups() {
     }
 
     if (sessions.length > 0) {
-      groups.push({ date: proj, sessions });
+      groups.push({ project: proj, sessions });
     }
   }
 
@@ -206,6 +206,7 @@ function getSessionRecords(project, sessionId) {
     sessionId,
     project,
     total: records.length,
+    records,
   };
 }
 
