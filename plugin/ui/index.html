@@ -70,7 +70,7 @@
 </div>
 <script>
 const API = '';
-let data = []; let currentSid = null; let currentDate = null; let activeSessionId = null;
+let data = []; let currentSid = null; let currentDate = null; let activeSessionId = null; let expandedGid = '';
 
 async function fetch_(path) {
   const r = await fetch(API + path);
@@ -163,8 +163,8 @@ function renderSidebar() {
     const gid = 'g' + (idx++);
     const sessions = g.sessions.sort((a, b) => b.date.localeCompare(a.date));
     const isActive = key === latestKey;
-    const open = isActive;
-    html += '<div class="proj-group"><div class="proj-header" onclick="toggleProj(\'' + gid + '\')"><span class="arrow ' + (open?'open':'') + '">▶</span> ' + esc(g.title) + ' <span style="margin-left:auto;font-weight:400">' + sessions.length + '</span></div><div class="proj-sessions" id="proj-' + gid + '" style="display:' + (open?'block':'none') + '">';
+    const open = gid === expandedGid || (!expandedGid && isActive);
+    html += '<div class="proj-group" data-gid="' + gid + '"><div class="proj-header" onclick="toggleProj(\'' + gid + '\')"><span class="arrow ' + (open?'open':'') + '">▶</span> ' + esc(g.title) + ' <span style="margin-left:auto;font-weight:400">' + sessions.length + '</span></div><div class="proj-sessions" id="proj-' + gid + '" style="display:' + (open?'block':'none') + '">';
     for (const s of sessions) {
       const isCur = s.sessionId === activeSessionId && s.date === latestDate;
       const act = currentSid === s.sessionId;
@@ -179,9 +179,14 @@ function renderSidebar() {
 function toggleProj(id) {
   const el = document.getElementById('proj-' + id);
   if (!el) return;
-  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+  const wasHidden = el.style.display === 'none';
+  // Collapse all other groups, expand this one
+  document.querySelectorAll('.proj-sessions').forEach(e => { e.style.display = 'none'; });
+  document.querySelectorAll('.arrow').forEach(a => a.classList.remove('open'));
+  el.style.display = 'block';
   const arrow = el.parentElement.querySelector('.arrow');
-  if (arrow) arrow.classList.toggle('open');
+  if (arrow) arrow.classList.add('open');
+  expandedGid = id;
 }
 
 function selectDate(date) {
@@ -198,6 +203,11 @@ function projFromWs(ws) {
 
 async function selectSession(date, sid) {
   currentDate = date; currentSid = sid;
+  const dateEl = document.querySelector('[data-sid="' + sid + '"]');
+  if (dateEl) {
+    const pg = dateEl.closest('.proj-group');
+    if (pg) expandedGid = pg.getAttribute('data-gid') || '';
+  }
   renderSidebar();
   document.getElementById('main').innerHTML = '<div class="loading">Loading records...</div>';
   try {
@@ -210,7 +220,7 @@ async function selectSession(date, sid) {
       if (ws) break;
     }
     const proj = projFromWs(ws);
-    const d = await fetch_('/api/sessions/' + proj + '/' + sid);
+    const d = await fetch_('/api/sessions/' + proj + '/' + sid + '?date=' + currentDate);
     renderRecords(d);
   } catch (e) {
     document.getElementById('main').innerHTML = '<div class="empty"><h2>Error</h2><p>' + e.message + '</p></div>';
@@ -224,7 +234,7 @@ function renderRecords(d) {
   let html = '<div class="main-header">' + esc(title) + '</div><div class="main-meta">' + d.total + ' records</div>';
   for (const r of d.records) {
     const type = r.type || 'unknown';
-    const time = r.ts ? new Date(r.ts).toLocaleTimeString() : '';
+    const time = r.ts ? new Date(r.ts).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) : '';
     html += '<div class="record ' + type + '"><div class="meta">' + time + ' · ' + type;
     if (r.toolName) html += ' · <span style="color:#d29922;font-weight:600">' + esc(r.toolName) + '</span>';
     html += '</div>';
