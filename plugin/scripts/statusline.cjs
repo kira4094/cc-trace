@@ -1,17 +1,10 @@
 #!/usr/bin/env node
-/**
- * cc-trace statusline.
- * Polls cc-trace Web UI API, outputs status.
- * Chainable via cc-statusline.
- */
 const http = require("http");
+const G = "\x1b[32m";
+const R = "\x1b[31m";
+const W = "\x1b[38;2;255;255;255m";
+const N = "\x1b[0m";
 
-const C = "\x1b[36m";  // cyan (trace)
-const G = "\x1b[32m";  // green (ON)
-const R = "\x1b[31m";  // red (OFF)
-const N = "\x1b[0m";   // reset
-
-// OSC 8 terminal hyperlink
 function link(url, text) {
   return "\x1b]8;;" + url + "\x1b\\" + text + "\x1b]8;;\x1b\\";
 }
@@ -32,22 +25,17 @@ async function main() {
   try {
     const raw = await httpGet("localhost", 13779, "/api/status");
     if (!raw) throw new Error("no response");
-
     const s = JSON.parse(raw);
-
-    const tag = "[" + G + "ON" + N + "]";
+    const tag = G + "ON" + N;
     const parts = [
-      "[trace" + tag + "]",
+      "[" + W + "trace" + N + "[" + tag + "]]",
       "session:" + s.sessionCount,
       "memory:" + s.memoryCount,
       link("http://localhost:13779", "http://localhost:13779"),
     ];
-
     process.stdout.write(parts.join(" | "));
   } catch {
-    // Server not running
-    process.stdout.write("[trace[" + R + "OFF" + N + "]]");
+    process.stdout.write("[" + W + "trace" + N + "[" + R + "OFF" + N + "]]");
   }
 }
-
 main();
