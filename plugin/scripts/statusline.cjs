@@ -37,7 +37,7 @@ async function main() {
 
     const tag = "[" + G + "ON" + N + "]";
     const parts = [
-      "[" + C + "trace" + N + tag + "]",
+      "[trace" + tag + "]",
       "session:" + s.sessionCount,
       "memory:" + s.memoryCount,
       link("http://localhost:13779", "http://localhost:13779"),
@@ -46,7 +46,7 @@ async function main() {
     process.stdout.write(parts.join(" | "));
   } catch {
     // Server not running
-    process.stdout.write("[" + C + "trace" + N + "[" + R + "OFF" + N + "]]");
+    process.stdout.write("[trace[" + R + "OFF" + N + "]]");
   }
 }
 
