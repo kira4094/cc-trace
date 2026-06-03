@@ -85,4 +85,14 @@ for (const f of PLUGIN_JSONS) {
   } catch {}
 }
 
+// Sync into plugin/version.json (server.js reads this for Web UI)
+const PLUGIN_VERSION = path.join(ROOT, "plugin", "version.json");
+try {
+  const pv = JSON.parse(fs.readFileSync(PLUGIN_VERSION, "utf8"));
+  if (pv.full !== full) {
+    Object.assign(pv, data);
+    fs.writeFileSync(PLUGIN_VERSION, JSON.stringify(pv, null, 2) + "\n");
+  }
+} catch {}
+
 console.log(`[version] ${full}`);
