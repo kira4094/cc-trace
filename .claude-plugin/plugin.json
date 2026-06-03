@@ -1,6 +1,6 @@
 {
   "name": "cc-trace",
-  "version": "v1.1.5(20260603.1420)",
+  "version": "v1.1.6(20260603.1424)",
   "description": "Persistent memory for Claude Code — session-level capture, keyword + AI search, Web UI",
   "author": {
     "name": "kira4094"

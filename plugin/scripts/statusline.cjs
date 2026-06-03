@@ -23,14 +23,16 @@ function httpGet(host, port, path) {
 
 async function main() {
   try {
-    const raw = await httpGet("localhost", 13779, "/api/status");
+    const raw = await httpGet("localhost", 13779, "/api/sessions");
     if (!raw) throw new Error("no response");
-    const s = JSON.parse(raw);
+    const projects = JSON.parse(raw);
+    let totalSessions = 0;
+    for (const p of projects) totalSessions += p.sessions.length;
     const tag = G + "ON" + N;
     const parts = [
       "[" + W + "trace" + N + "[" + tag + "]]",
-      "session:" + s.sessionCount,
-      "memory:" + s.memoryCount,
+      projects.length + "proj",
+      totalSessions + "ses",
       link("http://localhost:13779", "http://localhost:13779"),
     ];
     process.stdout.write(parts.join(" | "));
