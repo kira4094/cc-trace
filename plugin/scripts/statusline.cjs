@@ -37,7 +37,7 @@ async function main() {
       "[" + W + "trace" + N + "[" + tag + "]]",
       projects.length + "proj",
       totalSessions + "ses",
-      link("http://localhost:13779", "http://localhost:13779"),
+      link("http://localhost:13779", "cc-trace"),
     ];
     process.stdout.write(parts.join(" | "));
   } catch {
