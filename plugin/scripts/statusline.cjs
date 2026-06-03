@@ -6,13 +6,14 @@
  */
 const http = require("http");
 
-const G = "\x1b[32m";  // green
-const R = "\x1b[31m";  // red
+const C = "\x1b[36m";  // cyan (trace)
+const G = "\x1b[32m";  // green (ON)
+const R = "\x1b[31m";  // red (OFF)
 const N = "\x1b[0m";   // reset
 
 // OSC 8 terminal hyperlink
 function link(url, text) {
-  return "\x1b]8;;" + url + "\x07" + text + "\x1b]8;;\x07";
+  return "\x1b]8;;" + url + "\x1b\\" + text + "\x1b]8;;\x1b\\";
 }
 
 function httpGet(host, port, path) {
@@ -36,7 +37,7 @@ async function main() {
 
     const tag = "[" + G + "ON" + N + "]";
     const parts = [
-      "[trace" + tag + "]",
+      "[" + C + "trace" + N + tag + "]",
       "session:" + s.sessionCount,
       "memory:" + s.memoryCount,
       link("http://localhost:13779", "WEB"),
@@ -45,7 +46,7 @@ async function main() {
     process.stdout.write(parts.join(" | "));
   } catch {
     // Server not running
-    process.stdout.write("[trace[" + R + "OFF" + N + "]]");
+    process.stdout.write("[" + C + "trace" + N + "[" + R + "OFF" + N + "]]");
   }
 }
 
