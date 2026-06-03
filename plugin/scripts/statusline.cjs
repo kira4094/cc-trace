@@ -5,10 +5,6 @@ const R = "\x1b[31m";
 const W = "\x1b[38;2;255;255;255m";
 const N = "\x1b[0m";
 
-function link(url, text) {
-  return "\x1b]8;;" + url + "\x1b\\" + text + "\x1b]8;;\x1b\\";
-}
-
 function httpGet(host, port, path) {
   return new Promise((resolve) => {
     const req = http.get({ hostname: host, port, path, timeout: 2000 }, (res) => {
@@ -37,7 +33,7 @@ async function main() {
       "[" + W + "trace" + N + "[" + tag + "]]",
       projects.length + "proj",
       totalSessions + "ses",
-      link("http://localhost:13779", "cc-trace"),
+      "http://localhost:13779",
     ];
     process.stdout.write(parts.join(" | "));
   } catch {
