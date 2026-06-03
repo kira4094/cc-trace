@@ -26,8 +26,9 @@ async function main() {
     const raw = await httpGet("localhost", 13779, "/api/sessions");
     if (!raw) throw new Error("no response");
     const projects = JSON.parse(raw);
-    let totalSessions = 0;
-    for (const p of projects) totalSessions += p.sessions.length;
+    const seen = new Set();
+    for (const p of projects) for (const s of p.sessions) seen.add(s.sessionId);
+    const totalSessions = seen.size;
     const tag = G + "ON" + N;
     const parts = [
       "[" + W + "trace" + N + "[" + tag + "]]",
