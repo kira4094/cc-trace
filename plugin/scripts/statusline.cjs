@@ -40,7 +40,7 @@ async function main() {
       "[" + C + "trace" + N + tag + "]",
       "session:" + s.sessionCount,
       "memory:" + s.memoryCount,
-      link("http://localhost:13779", "WEB"),
+      link("http://localhost:13779", "http://localhost:13779"),
     ];
 
     process.stdout.write(parts.join(" | "));
