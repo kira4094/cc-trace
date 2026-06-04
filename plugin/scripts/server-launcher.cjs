@@ -25,6 +25,7 @@ const URLFILE = path.join(TRACE_DIR, "server.url");
 const PORT = 13779;
 const URL = `http://localhost:${PORT}`;
 const WAIT_MS = 2000;
+const VERSION_DST = path.join(TRACE_DIR, "version.json");
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
@@ -34,7 +35,6 @@ const WAIT_MS = 2000;
  */
 function syncFiles() {
   const SCRIPTS_DST = path.join(TRACE_DIR, "scripts");
-  const VERSION_DST = path.join(TRACE_DIR, "version.json");
   const VERSION_SRC = path.join(__dirname, "..", "version.json");
 
   try {
@@ -112,20 +112,45 @@ async function main() {
   // 0. Sync latest files from plugin cache (makes /plugin update effective)
   syncFiles();
 
-  // 1. Check PID file
+  // 1. Check PID file and version match
   if (fs.existsSync(PIDFILE)) {
     try {
       const pidStr = fs.readFileSync(PIDFILE, "utf8").trim();
       const pid = parseInt(pidStr, 10);
       if (!isNaN(pid) && isProcessAlive(pid)) {
-        // Already running — write URL file in case it was deleted
-        ensureDir(TRACE_DIR);
+        // Check if running version matches installed version
+        let versionMatch = false;
         try {
-          fs.writeFileSync(URLFILE, URL, "utf8");
-        } catch {
-          // best effort
+          const installedVer = JSON.parse(fs.readFileSync(VERSION_DST, "utf8")).full || "";
+          const status = await new Promise((resolve) => {
+            const http = require("http");
+            http.get(URL + "/api/status", (r) => {
+              let d = "";
+              r.on("data", (c) => d += c);
+              r.on("end", () => { try { resolve(JSON.parse(d).version); } catch { resolve(""); } });
+            }).on("error", () => resolve(""));
+          });
+          versionMatch = status === installedVer;
+        } catch {}
+
+        if (versionMatch) {
+          // Already running with matching version — write URL file and exit
+          ensureDir(TRACE_DIR);
+          try { fs.writeFileSync(URLFILE, URL, "utf8"); } catch {}
+          process.exit(0);
         }
-        process.exit(0);
+
+        // Version mismatch: kill old server
+        try {
+          if (process.platform === "win32") {
+            require("child_process").execSync(`taskkill /F /PID ${pid}`, {
+              stdio: "ignore", timeout: 3000,
+            });
+          } else {
+            process.kill(pid, "SIGTERM");
+          }
+        } catch {}
+        // Fall through to spawn new server
       }
     } catch {
       // Stale PID file, continue to launch
