@@ -172,7 +172,7 @@ function renderSidebar() {
     const open = gid === expandedGid || (!expandedGid && isActive);
     html += '<div class="proj-group" data-gid="' + gid + '"><div class="proj-header" onclick="toggleProj(\'' + gid + '\')"><span class="arrow ' + (open?'open':'') + '">▶</span> ' + esc(g.title) + ' <span style="margin-left:auto;font-weight:400">' + sessions.length + '</span></div><div class="proj-sessions" id="proj-' + gid + '" style="display:' + (open?'block':'none') + '">';
     for (const s of sessions) {
-      const isCur = s.sessionId === activeSessionId && s.date === latestDate;
+      const isCur = s.sessionId === activeSessionId && s.date === latestDate && key === latestKey;
       const act = currentSid === s.sessionId && currentDate === s.date;
       const dot = isCur ? '<span style="color:var(--green)">🟢</span> ' : '';
       html += '<div class="session-item' + (act ? ' active' : '') + '" onclick="selectSession(\'' + s.date + '\',\'' + s.sessionId + '\')" data-date="' + s.date + '" data-sid="' + s.sessionId + '"><span class="title" style="padding-left:16px">' + dot + s.date + '</span><span class="count">' + s.recordCount + '</span></div>';
@@ -209,7 +209,7 @@ function projFromWs(ws) {
 
 async function selectSession(date, sid) {
   currentDate = date; currentSid = sid;
-  const dateEl = document.querySelector('[data-sid="' + sid + '"]');
+  const dateEl = document.querySelector('[data-sid="' + sid + '"][data-date="' + date + '"]');
   if (dateEl) {
     const pg = dateEl.closest('.proj-group');
     if (pg) expandedGid = pg.getAttribute('data-gid') || '';
