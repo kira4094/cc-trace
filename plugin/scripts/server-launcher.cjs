@@ -2,12 +2,14 @@
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
-const { execSync } = require("child_process");
+const { spawn, execSync } = require("child_process");
 
-const PIDFILE = path.join(os.homedir(), ".claude-memory", "server.pid");
-const LOGFILE = path.join(os.homedir(), ".claude-memory", "server-error.log");
+const MEMORY_DIR = path.join(os.homedir(), ".claude-memory");
+const PIDFILE = path.join(MEMORY_DIR, "server.pid");
+const VERSION_FILE = path.join(MEMORY_DIR, "server.version");
+const INSTALLED_VERSION = path.join(__dirname, "..", "version.json");
 
-function getListeningPid() {
+function listeningPID() {
   try {
     const out = execSync(
       `netstat -ano | findstr ":13779 " | findstr LISTENING`,
@@ -22,42 +24,41 @@ function getListeningPid() {
   return null;
 }
 
-// If port already listening, update PID and exit
-const existingPid = getListeningPid();
-if (existingPid) {
-  fs.writeFileSync(PIDFILE, existingPid);
-  process.exit(0);
-}
+// Read installed version
+let installedVer = "";
+try { installedVer = JSON.parse(fs.readFileSync(INSTALLED_VERSION, "utf8")).full || ""; } catch {}
 
-// Use WMI to create process completely independent of job object
-// Win32_Process.Create spawns under WMI host, not as child of this process
-const nodeExe = process.execPath.replace(/\\/g, "\\\\");
-const serverJs = path.join(__dirname, "server.js").replace(/\\/g, "\\\\");
-const logFile = LOGFILE.replace(/\\/g, "\\\\");
-const cmdLine = `"${process.execPath}" "${path.join(__dirname, "server.js")}"`;
+const runningPid = listeningPID();
 
-try {
-  execSync(
-    `powershell -NoProfile -Command "Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{CommandLine='${cmdLine}'}" 2>$null`,
-    { timeout: 10000, stdio: "ignore" }
-  );
-} catch {
-  // Fallback: try WMI legacy method
-  try {
-    execSync(
-      `powershell -NoProfile -Command "Invoke-WmiMethod -Class Win32_Process -Name Create -ArgumentList '${cmdLine}'" 2>$null`,
-      { timeout: 10000, stdio: "ignore" }
-    );
-  } catch {}
-}
+if (runningPid) {
+  // Read running server's version
+  let runningVer = "";
+  try { runningVer = fs.readFileSync(VERSION_FILE, "utf8").trim(); } catch {}
 
-// Poll for PID
-const start = Date.now();
-while (Date.now() - start < 5000) {
-  const pid = getListeningPid();
-  if (pid) {
-    fs.writeFileSync(PIDFILE, pid);
+  if (runningVer === installedVer) {
+    // Version matches — keep existing server
+    try { fs.writeFileSync(PIDFILE, runningPid); } catch {}
     process.exit(0);
   }
-  execSync("ping -n 2 127.0.0.1 >nul", { stdio: "ignore" });
+
+  // Version mismatch — kill old server
+  try {
+    execSync(`taskkill /F /PID ${runningPid}`, { stdio: "ignore", timeout: 3000 });
+  } catch {}
+  // Wait briefly for port to be free
+  const start = Date.now();
+  while (Date.now() - start < 3000) {
+    if (!listeningPID()) break;
+    execSync("ping -n 2 127.0.0.1 >nul", { stdio: "ignore" });
+  }
 }
+
+// Spawn new server
+const server = spawn(process.execPath, [path.join(__dirname, "server.js")], {
+  detached: true, stdio: "ignore", windowsHide: true,
+});
+server.unref();
+try {
+  if (!fs.existsSync(MEMORY_DIR)) fs.mkdirSync(MEMORY_DIR, { recursive: true });
+  fs.writeFileSync(PIDFILE, String(server.pid));
+} catch {}

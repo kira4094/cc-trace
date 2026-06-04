@@ -27,7 +27,6 @@
     }],
     "Stop": [{
       "hooks": [
-        { "type": "command", "shell": "bash", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/server-shutdown.cjs\"", "timeout": 5 },
         { "type": "command", "shell": "bash", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/summarize.cjs\"", "timeout": 120000 }
       ]
     }]
