@@ -163,6 +163,19 @@ function renderSidebar() {
       }
     }
   }
+  // If currentSid is set, expand the group containing it
+  if (currentSid && !expandedGid) {
+    let gidx = 0;
+    for (const key of keys) {
+      for (const s of byTitle[key].sessions) {
+        if (s.sessionId === currentSid && s.date === currentDate) {
+          expandedGid = 'g' + gidx; break;
+        }
+      }
+      if (expandedGid) break;
+      gidx++;
+    }
+  }
   let html = '', idx = 0;
   for (const key of keys) {
     const g = byTitle[key];
@@ -203,23 +216,19 @@ function selectDate(date) {
 
 async function selectSession(date, sid, proj) {
   currentDate = date; currentSid = sid;
-  const dateEl = document.querySelector('[data-sid="' + sid + '"][data-date="' + date + '"]');
-  if (dateEl) {
-    const pg = dateEl.closest('.proj-group');
-    if (pg) expandedGid = pg.getAttribute('data-gid') || '';
-    if (!proj) proj = dateEl.getAttribute('data-proj') || '';
+  expandedGid = ''; // Reset so renderSidebar recalculates
+  // Find the correct project from data
+  if (!proj) {
+    for (const g of data) {
+      for (const s of g.sessions) {
+        if (s.sessionId === sid && s.date === date) { proj = g.project; break; }
+      }
+      if (proj) break;
+    }
   }
   renderSidebar();
   document.getElementById('main').innerHTML = '<div class="loading">Loading records...</div>';
   try {
-    if (!proj) {
-      for (const g of data) {
-        for (const s of g.sessions) {
-          if (s.sessionId === sid && s.date === date) { proj = g.project; break; }
-        }
-        if (proj) break;
-      }
-    }
     const d = await fetch_('/api/sessions/' + (proj || 'default') + '/' + sid + '?date=' + date);
     renderRecords(d);
   } catch (e) {
