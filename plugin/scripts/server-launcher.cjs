@@ -28,6 +28,39 @@ const WAIT_MS = 2000;
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
+/**
+ * Sync latest server.js + version.json from the plugin cache
+ * to TRACE_DIR scripts. This ensures /plugin update takes effect.
+ */
+function syncFiles() {
+  const SCRIPTS_DST = path.join(TRACE_DIR, "scripts");
+  const VERSION_DST = path.join(TRACE_DIR, "version.json");
+  const VERSION_SRC = path.join(__dirname, "..", "version.json");
+
+  try {
+    ensureDir(SCRIPTS_DST);
+    // Only copy when running from plugin cache (not already in TRACE_DIR)
+    if (!__dirname.startsWith(TRACE_DIR)) {
+      // Copy server.js
+      if (fs.existsSync(SERVER_JS)) {
+        fs.copyFileSync(SERVER_JS, path.join(SCRIPTS_DST, "server.js"));
+      }
+      // Copy server-launcher itself
+      const selfSrc = __filename;
+      const selfDst = path.join(SCRIPTS_DST, "server-launcher.cjs");
+      if (fs.existsSync(selfSrc)) {
+        fs.copyFileSync(selfSrc, selfDst);
+      }
+      // Copy version.json
+      if (fs.existsSync(VERSION_SRC)) {
+        fs.copyFileSync(VERSION_SRC, VERSION_DST);
+      }
+    }
+  } catch {
+    // best effort — never crash
+  }
+}
+
 /** Check if a process with the given PID is alive. */
 function isProcessAlive(pid) {
   try {
@@ -76,6 +109,9 @@ function ensureDir(dir) {
 // ── Main ────────────────────────────────────────────────────────────
 
 async function main() {
+  // 0. Sync latest files from plugin cache (makes /plugin update effective)
+  syncFiles();
+
   // 1. Check PID file
   if (fs.existsSync(PIDFILE)) {
     try {
