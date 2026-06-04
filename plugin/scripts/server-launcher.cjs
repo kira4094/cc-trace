@@ -2,58 +2,48 @@
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
-const { spawn } = require("child_process");
-const net = require("net");
+const { exec } = require("child_process");
 
 const PIDFILE = path.join(os.homedir(), ".claude-memory", "server.pid");
 const PORT = 13779;
+const LOGFILE = path.join(os.homedir(), ".claude-memory", "server-error.log");
 
-function portListening(port) {
-  return new Promise((resolve) => {
-    const c = net.createConnection({ port, host: "127.0.0.1", timeout: 500 }, () => { c.end(); resolve(true); });
-    c.on("error", () => resolve(false));
-    c.on("timeout", () => { c.destroy(); resolve(false); });
-  });
+function getListeningPID() {
+  try {
+    const out = require("child_process").execSync(
+      `netstat -ano | findstr ":${PORT} " | findstr LISTENING`,
+      { encoding: "utf8", timeout: 3000 }
+    ).trim();
+    const lines = out.split("\n").filter(Boolean);
+    for (const line of lines) {
+      const parts = line.trim().split(/\s+/);
+      const pid = parts[parts.length - 1];
+      if (pid && /^\d+$/.test(pid)) return pid;
+    }
+  } catch {}
+  return null;
 }
 
-async function main() {
+function main() {
   // If port already listening, server is running — update PID and exit
-  if (await portListening(PORT)) {
-    try {
-      const p = require("child_process").execSync(`netstat -ano | findstr ":${PORT} " | findstr LISTENING`, { encoding: "utf8", timeout: 3000 }).trim().split(/\s+/).pop();
-      if (p) fs.writeFileSync(PIDFILE, p);
-    } catch {}
+  const existing = getListeningPID();
+  if (existing) {
+    try { fs.writeFileSync(PIDFILE, existing); } catch {}
     return;
   }
 
-  // Spawn server with stderr captured to log
-  const logFd = require("fs").openSync(
-    require("path").join(require("os").homedir(), ".claude-memory", "server-error.log"),
-    "a"
-  );
-  const server = spawn(process.execPath, [path.join(__dirname, "server.js")], {
-    detached: true, stdio: ["ignore", "ignore", logFd], windowsHide: true,
+  // Use cmd /c start /B on Windows to break out of job object
+  // This is the only reliable way to create an independent process on Windows
+  const cmd = `start /B "" "${process.execPath}" "${path.join(__dirname, "server.js")}" >> "${LOGFILE}" 2>&1`;
+  exec(cmd, { shell: "cmd.exe", windowsHide: true }, () => {
+    // After spawn, wait a moment and update PID
+    setTimeout(() => {
+      const pid = getListeningPID();
+      if (pid) {
+        try { fs.writeFileSync(PIDFILE, pid); } catch {}
+      }
+    }, 2000);
   });
-  server.unref();
-
-  // Wait up to 3s for port
-  for (let i = 0; i < 6; i++) {
-    await new Promise((r) => setTimeout(r, 500));
-    if (await portListening(PORT)) {
-      try { fs.writeFileSync(PIDFILE, String(server.pid)); } catch {}
-      return;
-    }
-  }
-
-  // First attempt failed — try once more
-  const server2 = spawn(process.execPath, [path.join(__dirname, "server.js")], {
-    detached: true, stdio: ["ignore", "ignore", logFd], windowsHide: true,
-  });
-  server2.unref();
-  await new Promise((r) => setTimeout(r, 2000));
-  if (await portListening(PORT)) {
-    try { fs.writeFileSync(PIDFILE, String(server2.pid)); } catch {}
-  }
 }
 
 main();
