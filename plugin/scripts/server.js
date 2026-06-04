@@ -38,6 +38,12 @@ const MIME_TYPES = {
 };
 
 const SERVER_START = Date.now();
+// Write PID file for Stop hook (most reliable: process knows its own PID)
+try {
+  const pidDir = path.join(os.homedir(), ".claude-memory");
+  if (!fs.existsSync(pidDir)) fs.mkdirSync(pidDir, { recursive: true });
+  fs.writeFileSync(path.join(pidDir, "server.pid"), String(process.pid));
+} catch {}
 const VERSION = (() => {
   try {
     return JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'version.json'), 'utf8')).full || "0.0.0";
