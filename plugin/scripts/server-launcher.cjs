@@ -26,11 +26,13 @@ async function main() {
     return;
   }
 
-  // Spawn server
-  const logFile = require("path").join(require("os").homedir(), ".claude-memory", "server-error.log");
-  const logStream = require("fs").createWriteStream(logFile, { flags: "a" });
+  // Spawn server with stderr captured to log
+  const logFd = require("fs").openSync(
+    require("path").join(require("os").homedir(), ".claude-memory", "server-error.log"),
+    "a"
+  );
   const server = spawn(process.execPath, [path.join(__dirname, "server.js")], {
-    detached: true, stdio: ["ignore", "ignore", logStream], windowsHide: true,
+    detached: true, stdio: ["ignore", "ignore", logFd], windowsHide: true,
   });
   server.unref();
 
@@ -45,7 +47,7 @@ async function main() {
 
   // First attempt failed — try once more
   const server2 = spawn(process.execPath, [path.join(__dirname, "server.js")], {
-    detached: true, stdio: ["ignore", "ignore", logStream], windowsHide: true,
+    detached: true, stdio: ["ignore", "ignore", logFd], windowsHide: true,
   });
   server2.unref();
   await new Promise((r) => setTimeout(r, 2000));
