@@ -39,17 +39,6 @@ const MIME_TYPES = {
 
 const SERVER_START = Date.now();
 
-// Idle timeout: auto-shutdown after 10 min of no requests
-const IDLE_TIMEOUT_MS = 10 * 60 * 1000;
-let idleTimer = null;
-function resetIdleTimer() {
-  clearTimeout(idleTimer);
-  idleTimer = setTimeout(() => {
-    process.exit(0);
-  }, IDLE_TIMEOUT_MS);
-}
-resetIdleTimer();
-
 const VERSION = (() => {
   try {
     return JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'version.json'), 'utf8')).full || "0.0.0";
@@ -344,7 +333,6 @@ function serveStaticFile(res, urlPath) {
 
 async function handleRequest(req, res) {
   try {
-    resetIdleTimer(); // Any request resets the idle timeout
     setCORSHeaders(res);
 
     // Handle preflight
