@@ -6,8 +6,5 @@
     "name": "kira4094"
   },
   "repository": "https://github.com/kira4094/cc-trace",
-  "license": "MIT",
-  "commands": [
-    "./plugin/skills/trace-restart/SKILL.md"
-  ]
+  "license": "MIT"
 }
