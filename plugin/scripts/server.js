@@ -519,12 +519,15 @@ if (require.main === module) {
   }
 
   // Global error handler — never crash
+  const errLog = path.join(os.homedir(), ".claude-memory", "server-error.log");
   process.on("uncaughtException", (err) => {
-    console.error("[cc-trace] Uncaught exception:", err.message);
+    const m = `[${new Date().toISOString()}] UNCAUGHT: ${err.stack || err.message}\n`;
+    try { fs.appendFileSync(errLog, m); } catch {}
   });
 
   process.on("unhandledRejection", (reason) => {
-    console.error("[cc-trace] Unhandled rejection:", reason);
+    const m = `[${new Date().toISOString()}] UNHANDLED: ${reason}\n`;
+    try { fs.appendFileSync(errLog, m); } catch {}
   });
 
   start(port);
