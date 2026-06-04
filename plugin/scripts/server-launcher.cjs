@@ -32,20 +32,22 @@ try {
 const cmd = `start /B "" "${process.execPath}" "${path.join(__dirname, "server.js")}" >> "${LOGFILE}" 2>&1`;
 execSync(cmd, { shell: "cmd.exe", windowsHide: true, timeout: 5000 });
 
-// Wait briefly then capture PID
-setTimeout(() => {
+// Poll for PID synchronously (up to 3s) before exiting
+const start = Date.now();
+while (Date.now() - start < 3000) {
   try {
     const out = execSync(
       `netstat -ano | findstr ":13779 " | findstr LISTENING`,
-      { encoding: "utf8", timeout: 3000 }
+      { encoding: "utf8", timeout: 2000 }
     ).trim();
     for (const line of out.split("\n").filter(Boolean)) {
       const parts = line.trim().split(/\s+/);
       const pid = parts[parts.length - 1];
       if (pid && /^\d+$/.test(pid)) {
         fs.writeFileSync(PIDFILE, pid);
-        return;
+        process.exit(0);
       }
     }
   } catch {}
-}, 2000);
+  require("child_process").execSync("waitfor /T 1 2>nul || ping -n 2 127.0.0.1 >nul", { stdio: "ignore" });
+}
