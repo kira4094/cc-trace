@@ -133,14 +133,14 @@ function renderSidebar() {
         const name = (s.workspace || '').replace(/\\/g, '/').split('/').pop() || '';
         if (name !== selProj) continue;
       }
-      all.push(s);
+      all.push({ ...s, _proj: g.project });
     }
   }
   const byTitle = {};
-  for (const s of all) {
-    const key = s.title || s.sessionId.slice(0, 16);
+  for (const se of all) {
+    const key = se.title || se.sessionId.slice(0, 16);
     if (!byTitle[key]) byTitle[key] = { title: key, sessions: [] };
-    byTitle[key].sessions.push(s);
+    byTitle[key].sessions.push(se);
   }
   const keys = Object.keys(byTitle);
   if (keys.length === 0) { sb.innerHTML = '<div class="empty" style="padding:30px"><h2>No sessions</h2></div>'; return; }
@@ -175,7 +175,7 @@ function renderSidebar() {
       const isCur = s.sessionId === activeSessionId && s.date === latestDate && key === latestKey;
       const act = currentSid === s.sessionId && currentDate === s.date;
       const dot = isCur ? '<span style="color:var(--green)">🟢</span> ' : '';
-      html += '<div class="session-item' + (act ? ' active' : '') + '" onclick="selectSession(\'' + s.date + '\',\'' + s.sessionId + '\')" data-date="' + s.date + '" data-sid="' + s.sessionId + '"><span class="title" style="padding-left:16px">' + dot + s.date + '</span><span class="count">' + s.recordCount + '</span></div>';
+      html += '<div class="session-item' + (act ? ' active' : '') + '" onclick="selectSession(\'' + s.date + '\',\'' + s.sessionId + '\',\'' + (s._proj || '') + '\')" data-date="' + s.date + '" data-sid="' + s.sessionId + '" data-proj="' + (s._proj || '') + '"><span class="title" style="padding-left:16px">' + dot + s.date + '</span><span class="count">' + s.recordCount + '</span></div>';
     }
     html += '</div></div>';
   }
@@ -201,32 +201,26 @@ function selectDate(date) {
   renderSidebar();
 }
 
-function projFromWs(ws) {
-  if (!ws) return 'default';
-  const parts = ws.replace(/\\/g, '/').split('/').filter(Boolean);
-  return parts[parts.length - 1] || 'default';
-}
-
-async function selectSession(date, sid) {
+async function selectSession(date, sid, proj) {
   currentDate = date; currentSid = sid;
   const dateEl = document.querySelector('[data-sid="' + sid + '"][data-date="' + date + '"]');
   if (dateEl) {
     const pg = dateEl.closest('.proj-group');
     if (pg) expandedGid = pg.getAttribute('data-gid') || '';
+    if (!proj) proj = dateEl.getAttribute('data-proj') || '';
   }
   renderSidebar();
   document.getElementById('main').innerHTML = '<div class="loading">Loading records...</div>';
   try {
-    // Find the workspace from data to derive project folder name
-    let ws = null;
-    for (const g of data) {
-      for (const s of g.sessions) {
-        if (s.sessionId === sid) { ws = s.workspace; break; }
+    if (!proj) {
+      for (const g of data) {
+        for (const s of g.sessions) {
+          if (s.sessionId === sid && s.date === date) { proj = g.project; break; }
+        }
+        if (proj) break;
       }
-      if (ws) break;
     }
-    const proj = projFromWs(ws);
-    const d = await fetch_('/api/sessions/' + proj + '/' + sid + '?date=' + currentDate);
+    const d = await fetch_('/api/sessions/' + (proj || 'default') + '/' + sid + '?date=' + date);
     renderRecords(d);
   } catch (e) {
     document.getElementById('main').innerHTML = '<div class="empty"><h2>Error</h2><p>' + e.message + '</p></div>';
@@ -339,13 +333,15 @@ fetchActiveSession();
 setInterval(fetchActiveSession, 5000);
 loadSessions().then(() => {
   if (activeSessionId && !currentSid) {
-    let latestDate = '';
+    let latestDate = '', latestProj = '';
     for (const g of data) {
       for (const s of g.sessions) {
-        if (s.sessionId === activeSessionId && s.date > latestDate) latestDate = s.date;
+        if (s.sessionId === activeSessionId && s.date > latestDate) {
+          latestDate = s.date; latestProj = g.project;
+        }
       }
     }
-    if (latestDate) selectSession(latestDate, activeSessionId);
+    if (latestDate) selectSession(latestDate, activeSessionId, latestProj);
   }
 });
 </script>
