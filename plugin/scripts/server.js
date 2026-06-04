@@ -38,17 +38,16 @@ const MIME_TYPES = {
 };
 
 const SERVER_START = Date.now();
-const MEMORY_DIR = path.join(os.homedir(), ".claude-memory");
-try { if (!fs.existsSync(MEMORY_DIR)) fs.mkdirSync(MEMORY_DIR, { recursive: true }); } catch {}
-// Write PID + version files so launcher can detect stale servers
-try { fs.writeFileSync(path.join(MEMORY_DIR, "server.pid"), String(process.pid)); } catch {}
+// Write PID + version so launcher can detect stale servers
+try { fs.writeFileSync(path.join(TRACE_DIR, "server.pid"), String(process.pid)); } catch {}
+try { if (!fs.existsSync(TRACE_DIR)) fs.mkdirSync(TRACE_DIR, { recursive: true }); } catch {}
 const VERSION = (() => {
   try {
     return JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'version.json'), 'utf8')).full || "0.0.0";
   } catch { return "0.0.0"; }
 })();
 // Write version for launcher to detect stale servers
-try { fs.writeFileSync(path.join(MEMORY_DIR, "server.version"), VERSION); } catch {}
+try { fs.writeFileSync(path.join(TRACE_DIR, "server.version"), VERSION); } catch {}
 
 // ── Helpers ─────────────────────────────────────────────────────────────
 
