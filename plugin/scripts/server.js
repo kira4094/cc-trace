@@ -109,6 +109,16 @@ function isDirectory(p) {
   return s !== null && s.isDirectory();
 }
 
+function safeRemove(p) {
+  try {
+    if (fs.existsSync(p)) {
+      fs.rmSync(p, { recursive: true, force: true });
+      return true;
+    }
+  } catch {}
+  return false;
+}
+
 /**
  * Scan sessions directory and return summary grouped by project.
  * Structure: SESSIONS_DIR/<project>/<sessionId>/<date>/chunk-NNN.jsonl
@@ -346,8 +356,8 @@ async function handleRequest(req, res) {
       return;
     }
 
-    // Accept GET or POST with form data
-    if (req.method !== "GET" && req.method !== "POST") {
+    // Accept GET, POST, DELETE
+    if (req.method !== "GET" && req.method !== "POST" && req.method !== "DELETE") {
       sendError(res, "Method not allowed", 405);
       return;
     }
@@ -376,6 +386,56 @@ async function handleRequest(req, res) {
         return;
       }
     }
+
+    // ── DELETE Routes ─────────────────────────────────────────────────
+
+    // DELETE /api/sessions/:project/:sessionId
+    const sessionDeleteMatch = req.method === "DELETE" && pathname.match(
+      /^\/api\/sessions\/([^/]+)\/([^/]+)$/
+    );
+    if (sessionDeleteMatch) {
+      try {
+        const [, project, sessionId] = sessionDeleteMatch;
+        const sidDir = path.join(SESSIONS_DIR, project, sessionId);
+        if (!isDirectory(sidDir)) {
+          sendError(res, "Session not found", 404);
+          return;
+        }
+        safeRemove(sidDir);
+        sendJSON(res, { success: true });
+        return;
+      } catch (err) {
+        sendError(res, "Failed to delete session: " + err.message);
+        return;
+      }
+    }
+
+    // DELETE /api/sessions/:project
+    const projectDeleteMatch = req.method === "DELETE" && pathname.match(
+      /^\/api\/sessions\/([^/]+)$/
+    );
+    if (projectDeleteMatch) {
+      try {
+        const [, project] = projectDeleteMatch;
+        if (project === "") {
+          sendError(res, "Project name required", 400);
+          return;
+        }
+        const projDir = path.join(SESSIONS_DIR, project);
+        if (!isDirectory(projDir)) {
+          sendError(res, "Project not found", 404);
+          return;
+        }
+        safeRemove(projDir);
+        sendJSON(res, { success: true });
+        return;
+      } catch (err) {
+        sendError(res, "Failed to delete project: " + err.message);
+        return;
+      }
+    }
+
+    // ── GET Routes ────────────────────────────────────────────────────
 
     // GET /api/sessions/:project/:sessionId
     const sessionDetailMatch = pathname.match(
