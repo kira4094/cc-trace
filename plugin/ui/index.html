@@ -19,8 +19,9 @@
   .main::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
   .bottombar { display: flex; align-items: center; padding: 4px 20px; background: var(--surface); border-top: 1px solid var(--border); font-size: 11px; color: var(--text-dim); }
   .proj-group { border-bottom: 1px solid var(--border); }
-  .proj-header { display: flex; align-items: center; gap: 6px; padding: 8px 14px; font-size: 12px; font-weight: 600; color: var(--accent); cursor: pointer; user-select: none; }
+  .proj-header { display: flex; align-items: center; gap: 6px; padding: 8px 14px; font-size: 12px; font-weight: 600; color: var(--accent); cursor: pointer; user-select: none; border-left: 2px solid transparent; }
   .proj-header:hover { background: var(--hover); }
+  .proj-header.active { border-left-color: var(--accent); background: var(--active-bg); }
   .proj-header .arrow { font-size: 10px; transition: transform 0.15s; }
   .proj-header .arrow.open { transform: rotate(90deg); }
   .session-item { display: flex; align-items: center; gap: 8px; padding: 6px 14px 6px 28px; cursor: pointer; border-left: 2px solid transparent; font-size: 13px; }
@@ -137,11 +138,11 @@ function renderSidebar() {
     if (sessions.length === 0) continue;
 
     var isOpen = expandedSet.has(gid);
-    var projHasActive = (projName === activeProj);
+    // Project header: active indicator via border-left (no green dot)
+    var projActive = (projName === activeProj);
     html += '<div class="proj-group" data-gid="' + gid + '">';
-    html += '<div class="proj-header" onclick="toggleProj(\'' + gid + '\')">';
+    html += '<div class="proj-header' + (projActive ? ' active' : '') + '" onclick="toggleProj(\'' + gid + '\')">';
     html += '<span class="arrow ' + (isOpen ? 'open' : '') + '">&#9654;</span> ';
-    html += (projHasActive ? '<span style="color:var(--green)">&#x1F7E2; </span>' : '');
     html += esc(projName);
     html += ' <span style="margin-left:auto;font-weight:400">' + sessions.length + '</span>';
     html += '</div>';
@@ -151,13 +152,11 @@ function renderSidebar() {
       var sess = sessions[si];
       var sorted = sess.dates.slice().sort();
       var range = sorted.length === 1 ? sorted[0].slice(4) : sorted[0].slice(4) + ' ~ ' + sorted[sorted.length - 1].slice(4);
-      // Green dot: active session AND in the project with its latest record
-      var isActive = sess.sessionId === activeSessionId && projName === activeProj;
+      // Session highlight ONLY on click (isSelected), decoupled from activeSessionId
       var isSelected = sess.sessionId === currentSid;
-      var dot = isActive ? '<span style="color:var(--green)">&#x1F7E2;</span> ' : '';
 
       html += '<div class="session-item' + (isSelected ? ' active' : '') + '" onclick="selectSession(this)" data-sid="' + sess.sessionId + '" data-proj="' + esc(projName) + '">';
-      html += '<span class="title">' + dot + esc(sess.title || sess.sessionId.slice(0, 20)) + '</span>';
+      html += '<span class="title">' + esc(sess.title || sess.sessionId.slice(0, 20)) + '</span>';
       html += '<span class="date">' + range + '</span>';
       html += '<span class="count">' + sess.totalRecords + '</span>';
       html += '</div>';
@@ -290,25 +289,15 @@ updateStatus();
 setInterval(updateStatus, 10000);
 fetchActiveSession();
 setInterval(fetchActiveSession, 5000);
-// Fetch data, then auto-select active session after a short delay for safety
-async function init() {
+loadSessions();
+async function loadSessions() {
   try {
     data = await fetch_('/api/sessions');
     renderSidebar();
-    // Retry auto-select after 1s to ensure fetchActiveSession has completed
-    setTimeout(function() {
-      var bestProj = findActiveProject();
-      if (activeSessionId && bestProj) {
-        // Find the session element and select it
-        var el = document.querySelector('[data-sid="' + activeSessionId + '"][data-proj="' + esc(bestProj) + '"]');
-        if (el) selectSession(el);
-      }
-    }, 1000);
   } catch (e) {
     document.getElementById('sidebar').innerHTML = '<div class="empty"><h2>Error</h2><p>' + e.message + '</p></div>';
   }
 }
-init();
 </script>
 </body>
 </html>
