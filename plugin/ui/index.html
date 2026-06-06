@@ -69,39 +69,22 @@
   <span style="margin-left:auto;font-size:11px;color:var(--text-dim)" id="version"></span>
 </div>
 <script>
-const API = '';
-let data = []; let currentSid = null; let activeSessionId = null; let expandedSet = new Set();
+var API = '';
+var data = []; var currentSid = null; var activeSessionId = null; var expandedSet = new Set();
 
 async function fetch_(path) {
-  const r = await fetch(API + path);
+  var r = await fetch(API + path);
   if (!r.ok) throw new Error(r.statusText);
   return r.json();
 }
 
 async function updateStatus() {
   try {
-    const s = await fetch_('/api/status');
+    var s = await fetch_('/api/status');
     document.getElementById('status').innerHTML = '<span style="color:var(--accent);font-weight:600">cc-trace</span> ' + s.sessionCount + ' sessions · ' + s.memoryCount + ' memories';
     if (s.version) document.getElementById('version').textContent = s.version;
   } catch {}
 }
-
-async function loadSessions() {
-  document.getElementById('sidebar').innerHTML = '<div class="loading">Loading...</div>';
-  try {
-    data = await fetch_('/api/sessions');
-    renderSidebar();
-    // Try auto-expand + auto-select (works if fetchActiveSession already finished)
-    if (activeSessionId) {
-      openActiveProject();
-      autoSelectActive();
-    }
-  } catch (e) {
-    document.getElementById('sidebar').innerHTML = '<div class="empty"><h2>Error</h2><p>' + e.message + '</p></div>';
-  }
-}
-
-function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 /** Find which project has the most recent record for the active session */
 function findActiveProject() {
@@ -119,29 +102,7 @@ function findActiveProject() {
   return bestProj;
 }
 
-/** Open the active session's project in sidebar */
-function openActiveProject() {
-  var targetProj = findActiveProject();
-  if (!targetProj) return;
-  // Find the project's gid and open it
-  var headers = document.querySelectorAll('.proj-header');
-  for (var h = 0; h < headers.length; h++) {
-    if (headers[h].textContent.trim().startsWith(targetProj)) {
-      var pg = headers[h].closest('.proj-group');
-      if (pg) {
-        var gid = pg.getAttribute('data-gid');
-        if (gid) {
-          expandedSet.add(gid);
-          var el = document.getElementById('proj-' + gid);
-          if (el) { el.style.display = 'block'; }
-          var arrow = headers[h].querySelector('.arrow');
-          if (arrow) arrow.classList.add('open');
-        }
-      }
-      break;
-    }
-  }
-}
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 function renderSidebar() {
   var sb = document.getElementById('sidebar');
@@ -176,9 +137,11 @@ function renderSidebar() {
     if (sessions.length === 0) continue;
 
     var isOpen = expandedSet.has(gid);
+    var projHasActive = (projName === activeProj);
     html += '<div class="proj-group" data-gid="' + gid + '">';
     html += '<div class="proj-header" onclick="toggleProj(\'' + gid + '\')">';
     html += '<span class="arrow ' + (isOpen ? 'open' : '') + '">&#9654;</span> ';
+    html += (projHasActive ? '<span style="color:var(--green)">&#x1F7E2; </span>' : '');
     html += esc(projName);
     html += ' <span style="margin-left:auto;font-weight:400">' + sessions.length + '</span>';
     html += '</div>';
@@ -305,38 +268,10 @@ async function doSearch() {
   }
 }
 
-/** Auto-select the active session: find its latest record and open it */
-function autoSelectActive() {
-  if (!activeSessionId || currentSid || data.length === 0) return;
-  var best = null;
-  var bestProj = null;
-  for (var g = 0; g < data.length; g++) {
-    for (var s = 0; s < data[g].sessions.length; s++) {
-      if (data[g].sessions[s].sessionId === activeSessionId) {
-        if (!best || data[g].sessions[s].date > best.date) {
-          best = data[g].sessions[s];
-          bestProj = data[g].project;
-        }
-      }
-    }
-  }
-  if (!best || !bestProj) return;
-  var el = document.querySelector('[data-sid="' + best.sessionId + '"][data-proj="' + esc(bestProj) + '"]');
-  if (el) selectSession(el);
-}
-
 async function fetchActiveSession() {
   try {
     var r = await fetch_('/api/current-session');
-    if (r.sessionId) {
-      activeSessionId = r.sessionId;
-      // If data is already loaded, re-render with green dot and auto-select
-      if (data.length > 0) {
-        renderSidebar();
-        openActiveProject();
-        autoSelectActive();
-      }
-    }
+    if (r.sessionId) activeSessionId = r.sessionId;
   } catch {}
 }
 
@@ -355,7 +290,25 @@ updateStatus();
 setInterval(updateStatus, 10000);
 fetchActiveSession();
 setInterval(fetchActiveSession, 5000);
-loadSessions();
+// Fetch data, then auto-select active session after a short delay for safety
+async function init() {
+  try {
+    data = await fetch_('/api/sessions');
+    renderSidebar();
+    // Retry auto-select after 1s to ensure fetchActiveSession has completed
+    setTimeout(function() {
+      var bestProj = findActiveProject();
+      if (activeSessionId && bestProj) {
+        // Find the session element and select it
+        var el = document.querySelector('[data-sid="' + activeSessionId + '"][data-proj="' + esc(bestProj) + '"]');
+        if (el) selectSession(el);
+      }
+    }, 1000);
+  } catch (e) {
+    document.getElementById('sidebar').innerHTML = '<div class="empty"><h2>Error</h2><p>' + e.message + '</p></div>';
+  }
+}
+init();
 </script>
 </body>
 </html>
