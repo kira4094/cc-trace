@@ -71,7 +71,7 @@
 </div>
 <script>
 var API = '';
-var data = []; var currentSid = null; var activeSessionId = null; var expandedSet = new Set();
+var data = []; var currentSid = null; var currentProj = null; var activeSessionId = null; var expandedSet = new Set();
 
 async function fetch_(path) {
   var r = await fetch(API + path);
@@ -138,7 +138,7 @@ function renderSidebar() {
     if (sessions.length === 0) continue;
 
     var isOpen = expandedSet.has(gid);
-    // Project header: active indicator via border-left (no green dot)
+    // Project header: accent border-left when contains active session
     var projActive = (projName === activeProj);
     html += '<div class="proj-group" data-gid="' + gid + '">';
     html += '<div class="proj-header' + (projActive ? ' active' : '') + '" onclick="toggleProj(\'' + gid + '\')">';
@@ -152,11 +152,14 @@ function renderSidebar() {
       var sess = sessions[si];
       var sorted = sess.dates.slice().sort();
       var range = sorted.length === 1 ? sorted[0].slice(4) : sorted[0].slice(4) + ' ~ ' + sorted[sorted.length - 1].slice(4);
-      // Session highlight ONLY on click (isSelected), decoupled from activeSessionId
-      var isSelected = sess.sessionId === currentSid;
+      // Green dot: active session AND in the active project only
+      var isActive = sess.sessionId === activeSessionId && projName === activeProj;
+      // Highlight: selected by user in THIS project (not just same sessionId across projects)
+      var isSelected = sess.sessionId === currentSid && projName === currentProj;
+      var dot = isActive ? '<span style="color:var(--green)">&#x1F7E2;</span> ' : '';
 
       html += '<div class="session-item' + (isSelected ? ' active' : '') + '" onclick="selectSession(this)" data-sid="' + sess.sessionId + '" data-proj="' + esc(projName) + '">';
-      html += '<span class="title">' + esc(sess.title || sess.sessionId.slice(0, 20)) + '</span>';
+      html += '<span class="title">' + dot + esc(sess.title || sess.sessionId.slice(0, 20)) + '</span>';
       html += '<span class="date">' + range + '</span>';
       html += '<span class="count">' + sess.totalRecords + '</span>';
       html += '</div>';
@@ -188,6 +191,7 @@ async function selectSession(el) {
   var sid = el.dataset.sid;
   var proj = el.dataset.proj;
   currentSid = sid;
+  currentProj = proj;
   renderSidebar();
   document.getElementById('main').innerHTML = '<div class="loading">Loading records...</div>';
   try {
