@@ -70,7 +70,7 @@
 </div>
 <script>
 const API = '';
-let data = []; let currentSid = null; let activeSessionId = null; let expandedGid = '';
+let data = []; let currentSid = null; let activeSessionId = null; let expandedSet = new Set();
 
 async function fetch_(path) {
   const r = await fetch(API + path);
@@ -91,6 +91,10 @@ async function loadSessions() {
   try {
     data = await fetch_('/api/sessions');
     renderSidebar();
+    // Auto-expand active session's project
+    if (activeSessionId) {
+      openActiveProject();
+    }
   } catch (e) {
     document.getElementById('sidebar').innerHTML = '<div class="empty"><h2>Error</h2><p>' + e.message + '</p></div>';
   }
@@ -98,24 +102,63 @@ async function loadSessions() {
 
 function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-function renderSidebar() {
-  const sb = document.getElementById('sidebar');
-  let html = '', projIdx = 0;
+/** Find which project has the most recent record for the active session */
+function findActiveProject() {
+  if (!activeSessionId) return null;
+  var bestProj = null;
+  var bestDate = '';
+  for (var g = 0; g < data.length; g++) {
+    for (var s = 0; s < data[g].sessions.length; s++) {
+      if (data[g].sessions[s].sessionId === activeSessionId && data[g].sessions[s].date > bestDate) {
+        bestDate = data[g].sessions[s].date;
+        bestProj = data[g].project;
+      }
+    }
+  }
+  return bestProj;
+}
 
-  for (const group of data) {
-    const projName = group.project || 'default';
-    const gid = 'p' + (projIdx++);
+/** Open the active session's project in sidebar */
+function openActiveProject() {
+  var targetProj = findActiveProject();
+  if (!targetProj) return;
+  // Find the project's gid and open it
+  var headers = document.querySelectorAll('.proj-header');
+  for (var h = 0; h < headers.length; h++) {
+    if (headers[h].textContent.trim().startsWith(targetProj)) {
+      var pg = headers[h].closest('.proj-group');
+      if (pg) {
+        var gid = pg.getAttribute('data-gid');
+        if (gid) {
+          expandedSet.add(gid);
+          var el = document.getElementById('proj-' + gid);
+          if (el) { el.style.display = 'block'; }
+          var arrow = headers[h].querySelector('.arrow');
+          if (arrow) arrow.classList.add('open');
+        }
+      }
+      break;
+    }
+  }
+}
+
+function renderSidebar() {
+  var sb = document.getElementById('sidebar');
+  var activeProj = findActiveProject();
+  var html = '', projIdx = 0;
+
+  for (var g = 0; g < data.length; g++) {
+    var group = data[g];
+    var projName = group.project || 'default';
+    var gid = 'p' + (projIdx++);
 
     // Group sessions by sessionId within this project
-    const sessionMap = {};
-    for (const s of group.sessions) {
-      const sid = s.sessionId;
+    var sessionMap = {};
+    for (var si = 0; si < group.sessions.length; si++) {
+      var s = group.sessions[si];
+      var sid = s.sessionId;
       if (!sessionMap[sid]) {
-        sessionMap[sid] = {
-          sessionId: sid, title: s.title || sid.slice(0, 20),
-          dates: [], totalRecords: 0, workspace: s.workspace,
-          _latestDate: ''
-        };
+        sessionMap[sid] = { sessionId: sid, title: s.title || sid.slice(0, 20), dates: [], totalRecords: 0, workspace: s.workspace, _latestDate: '' };
       }
       sessionMap[sid].dates.push(s.date);
       sessionMap[sid].totalRecords += s.recordCount;
@@ -125,13 +168,13 @@ function renderSidebar() {
       }
     }
 
-    const sessions = Object.values(sessionMap).sort((a, b) => {
-      return Math.max(...b.dates.map(Number)) - Math.max(...a.dates.map(Number));
+    var sessions = Object.values(sessionMap).sort(function(a, b) {
+      return Math.max.apply(null, b.dates.map(Number)) - Math.max.apply(null, a.dates.map(Number));
     });
 
     if (sessions.length === 0) continue;
 
-    const isOpen = gid === expandedGid;
+    var isOpen = expandedSet.has(gid);
     html += '<div class="proj-group" data-gid="' + gid + '">';
     html += '<div class="proj-header" onclick="toggleProj(\'' + gid + '\')">';
     html += '<span class="arrow ' + (isOpen ? 'open' : '') + '">&#9654;</span> ';
@@ -140,17 +183,19 @@ function renderSidebar() {
     html += '</div>';
     html += '<div class="proj-sessions" id="proj-' + gid + '" style="display:' + (isOpen ? 'block' : 'none') + '">';
 
-    for (const s of sessions) {
-      const sorted = [...s.dates].sort();
-      const range = sorted.length === 1 ? sorted[0].slice(4) : sorted[0].slice(4) + ' ~ ' + sorted[sorted.length - 1].slice(4);
-      const isActive = s.sessionId === activeSessionId;
-      const isSelected = s.sessionId === currentSid;
-      const dot = isActive ? '<span style="color:var(--green)">&#x1F7E2;</span> ' : '';
+    for (var si = 0; si < sessions.length; si++) {
+      var sess = sessions[si];
+      var sorted = sess.dates.slice().sort();
+      var range = sorted.length === 1 ? sorted[0].slice(4) : sorted[0].slice(4) + ' ~ ' + sorted[sorted.length - 1].slice(4);
+      // Green dot: active session AND in the project with its latest record
+      var isActive = sess.sessionId === activeSessionId && projName === activeProj;
+      var isSelected = sess.sessionId === currentSid;
+      var dot = isActive ? '<span style="color:var(--green)">&#x1F7E2;</span> ' : '';
 
-      html += '<div class="session-item' + (isSelected ? ' active' : '') + '" onclick="selectSession(this)" data-sid="' + s.sessionId + '" data-proj="' + esc(projName) + '">';
-      html += '<span class="title">' + dot + esc(s.title || s.sessionId.slice(0, 20)) + '</span>';
+      html += '<div class="session-item' + (isSelected ? ' active' : '') + '" onclick="selectSession(this)" data-sid="' + sess.sessionId + '" data-proj="' + esc(projName) + '">';
+      html += '<span class="title">' + dot + esc(sess.title || sess.sessionId.slice(0, 20)) + '</span>';
       html += '<span class="date">' + range + '</span>';
-      html += '<span class="count">' + s.totalRecords + '</span>';
+      html += '<span class="count">' + sess.totalRecords + '</span>';
       html += '</div>';
     }
 
@@ -161,22 +206,25 @@ function renderSidebar() {
 }
 
 function toggleProj(id) {
-  const el = document.getElementById('proj-' + id);
+  var el = document.getElementById('proj-' + id);
   if (!el) return;
-  document.querySelectorAll('.proj-sessions').forEach(function(e) { e.style.display = 'none'; });
-  document.querySelectorAll('.arrow').forEach(function(a) { a.classList.remove('open'); });
-  el.style.display = 'block';
-  var arrow = el.parentElement.querySelector('.arrow');
-  if (arrow) arrow.classList.add('open');
-  expandedGid = id;
+  if (el.style.display === 'block') {
+    el.style.display = 'none';
+    var arrow = el.parentElement.querySelector('.arrow');
+    if (arrow) arrow.classList.remove('open');
+    expandedSet.delete(id);
+  } else {
+    el.style.display = 'block';
+    var arrow = el.parentElement.querySelector('.arrow');
+    if (arrow) arrow.classList.add('open');
+    expandedSet.add(id);
+  }
 }
 
 async function selectSession(el) {
   var sid = el.dataset.sid;
   var proj = el.dataset.proj;
   currentSid = sid;
-  var pg = el.closest('.proj-group');
-  if (pg) expandedGid = pg.getAttribute('data-gid') || '';
   renderSidebar();
   document.getElementById('main').innerHTML = '<div class="loading">Loading records...</div>';
   try {
@@ -194,44 +242,38 @@ const TOOL_COLORS = {
 };
 
 function renderRecords(d) {
-  const main = document.getElementById('main');
+  var main = document.getElementById('main');
   if (!d || !d.records || d.records.length === 0) { main.innerHTML = '<div class="empty"><h2>No records</h2></div>'; return; }
-  const title = (d.records.find(r => r.type === 'user_message')?.content || d.sessionId).slice(0, 60).replace(/\n/g, ' ');
-  let html = '<div class="main-header">' + esc(title) + '</div><div class="main-meta">' + d.total + ' records</div>';
+  var title = (d.records.find(function(r) { return r.type === 'user_message'; })?.content || d.sessionId).slice(0, 60).replace(/\n/g, ' ');
+  var html = '<div class="main-header">' + esc(title) + '</div><div class="main-meta">' + d.total + ' records</div>';
 
-  let i = 0;
+  var i = 0;
   while (i < d.records.length) {
-    const r = d.records[i];
-    const type = r.type || 'unknown';
-    const time = r.ts ? new Date(r.ts).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) : '';
+    var r = d.records[i];
+    var type = r.type || 'unknown';
+    var time = r.ts ? new Date(r.ts).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) : '';
 
     if (type === 'tool_use') {
-      // Group consecutive tool_use records
-      const group = [];
-      while (i < d.records.length && d.records[i].type === 'tool_use') {
-        group.push(d.records[i]);
-        i++;
-      }
-      // Count by tool name
-      const counts = {};
-      const names = [];
-      for (const t of group) {
-        const n = t.toolName || 'unknown';
+      var group = [];
+      while (i < d.records.length && d.records[i].type === 'tool_use') { group.push(d.records[i]); i++; }
+      var counts = {};
+      var names = [];
+      for (var ti = 0; ti < group.length; ti++) {
+        var n = group[ti].toolName || 'unknown';
         if (!counts[n]) { counts[n] = 0; names.push(n); }
         counts[n]++;
       }
-      const tools = names.map(n => {
-        const c = TOOL_COLORS[n] || TOOL_COLORS.default;
-        const label = counts[n] > 1 ? n + '(' + counts[n] + ')' : n;
+      var tools = names.map(function(n) {
+        var c = TOOL_COLORS[n] || TOOL_COLORS.default;
+        var label = counts[n] > 1 ? n + '(' + counts[n] + ')' : n;
         return '<span style="color:' + c + ';font-weight:600">' + label + '</span>';
       });
-      const ts = group[0].ts;
-      const grpTime = ts ? new Date(ts).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) : '';
+      var grpTime = group[0].ts ? new Date(group[0].ts).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) : '';
       html += '<div class="record tool_use"><div class="meta">' + grpTime + ' · ' + tools.join(' ') + '</div></div>';
     } else {
       html += '<div class="record ' + type + '"><div class="meta">' + time + ' · ' + type;
       if (r.toolName) {
-        const c = TOOL_COLORS[r.toolName] || TOOL_COLORS.default;
+        var c = TOOL_COLORS[r.toolName] || TOOL_COLORS.default;
         html += ' · <span style="color:' + c + ';font-weight:600">' + esc(r.toolName) + '</span>';
       }
       html += '</div>';
@@ -244,17 +286,17 @@ function renderRecords(d) {
 }
 
 async function doSearch() {
-  const q = document.getElementById('search-input').value.trim();
+  var q = document.getElementById('search-input').value.trim();
   if (!q) return;
   document.getElementById('main').innerHTML = '<div class="loading">Searching...</div>';
   try {
-    const r = await fetch_('/api/search?q=' + encodeURIComponent(q));
-    const items = r.keyword || r.ai_fallback || [];
+    var r = await fetch_('/api/search?q=' + encodeURIComponent(q));
+    var items = r.keyword || r.ai_fallback || [];
     if (!items || items.length === 0) { document.getElementById('main').innerHTML = '<div class="empty"><h2>No results</h2></div>'; return; }
-    let html = '<div class="main-header">Results</div><div class="main-meta">' + items.length + ' matches</div>';
-    for (const item of items) {
-      const content = item.record?.content || item.content || '';
-      html += '<div class="record"><div class="meta">[' + (item.date || '?') + ']</div><div class="content">' + esc(String(content).slice(0,500)) + '</div></div>';
+    var html = '<div class="main-header">Results</div><div class="main-meta">' + items.length + ' matches</div>';
+    for (var ii = 0; ii < items.length; ii++) {
+      var content = items[ii].record?.content || items[ii].content || '';
+      html += '<div class="record"><div class="meta">[' + (items[ii].date || '?') + ']</div><div class="content">' + esc(String(content).slice(0,500)) + '</div></div>';
     }
     document.getElementById('main').innerHTML = html;
   } catch (e) {
@@ -264,20 +306,19 @@ async function doSearch() {
 
 async function fetchActiveSession() {
   try {
-    const r = await fetch_('/api/current-session');
+    var r = await fetch_('/api/current-session');
     if (r.sessionId) activeSessionId = r.sessionId;
   } catch {}
 }
 
 function toggleTheme() {
-  const isDark = document.body.getAttribute('data-theme') === 'dark';
+  var isDark = document.body.getAttribute('data-theme') === 'dark';
   document.body.setAttribute('data-theme', isDark ? '' : 'dark');
   document.getElementById('theme-btn').textContent = isDark ? '☽' : '☀';
   try { localStorage.setItem('cc-trace-theme', isDark ? 'light' : 'dark'); } catch {}
 }
-// Restore saved theme
 try {
-  const saved = localStorage.getItem('cc-trace-theme');
+  var saved = localStorage.getItem('cc-trace-theme');
   if (saved === 'dark') { document.body.setAttribute('data-theme', 'dark'); document.getElementById('theme-btn').textContent = '☀'; }
 } catch {}
 
@@ -287,7 +328,7 @@ fetchActiveSession();
 setInterval(fetchActiveSession, 5000);
 loadSessions().then(function() {
   if (activeSessionId && !currentSid) {
-    // Auto-select active session: find latest date across all projects
+    // Auto-select the active session: find latest date across all projects
     var best = null;
     for (var g = 0; g < data.length; g++) {
       for (var s = 0; s < data[g].sessions.length; s++) {
@@ -297,13 +338,15 @@ loadSessions().then(function() {
       }
     }
     if (best) {
-      // Find the DOM element for this session to call selectSession(el)
-      // Build project name from data
-      var projName = data.find(function(g) {
-        return g.sessions.some(function(s) { return s.sessionId === best.sessionId; });
-      });
-      if (projName) {
-        var el = document.querySelector('[data-sid="' + best.sessionId + '"][data-proj="' + esc(projName.project) + '"]');
+      var projGroup = null;
+      for (var g = 0; g < data.length; g++) {
+        if (data[g].sessions.some(function(s) { return s.sessionId === best.sessionId; })) {
+          projGroup = data[g].project;
+          break;
+        }
+      }
+      if (projGroup) {
+        var el = document.querySelector('[data-sid="' + best.sessionId + '"][data-proj="' + esc(projGroup) + '"]');
         if (el) selectSession(el);
       }
     }
