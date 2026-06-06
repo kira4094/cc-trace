@@ -91,9 +91,10 @@ async function loadSessions() {
   try {
     data = await fetch_('/api/sessions');
     renderSidebar();
-    // Auto-expand active session's project
+    // Try auto-expand + auto-select (works if fetchActiveSession already finished)
     if (activeSessionId) {
       openActiveProject();
+      autoSelectActive();
     }
   } catch (e) {
     document.getElementById('sidebar').innerHTML = '<div class="empty"><h2>Error</h2><p>' + e.message + '</p></div>';
@@ -304,10 +305,44 @@ async function doSearch() {
   }
 }
 
+/** Auto-select the active session: find its latest record and open it */
+function autoSelectActive() {
+  if (!activeSessionId || currentSid || data.length === 0) return;
+  var best = null;
+  for (var g = 0; g < data.length; g++) {
+    for (var s = 0; s < data[g].sessions.length; s++) {
+      if (data[g].sessions[s].sessionId === activeSessionId) {
+        if (!best || data[g].sessions[s].date > best.date) best = data[g].sessions[s];
+      }
+    }
+  }
+  if (!best) return;
+  // Find which project this session is in
+  var projGroup = null;
+  for (var g = 0; g < data.length; g++) {
+    if (data[g].sessions.some(function(s) { return s.sessionId === best.sessionId; })) {
+      projGroup = data[g].project;
+      break;
+    }
+  }
+  if (!projGroup) return;
+  // Find the DOM element and click it
+  var el = document.querySelector('[data-sid="' + best.sessionId + '"][data-proj="' + esc(projGroup) + '"]');
+  if (el) selectSession(el);
+}
+
 async function fetchActiveSession() {
   try {
     var r = await fetch_('/api/current-session');
-    if (r.sessionId) activeSessionId = r.sessionId;
+    if (r.sessionId) {
+      activeSessionId = r.sessionId;
+      // If data is already loaded, re-render with green dot and auto-select
+      if (data.length > 0) {
+        renderSidebar();
+        openActiveProject();
+        autoSelectActive();
+      }
+    }
   } catch {}
 }
 
@@ -326,32 +361,7 @@ updateStatus();
 setInterval(updateStatus, 10000);
 fetchActiveSession();
 setInterval(fetchActiveSession, 5000);
-loadSessions().then(function() {
-  if (activeSessionId && !currentSid) {
-    // Auto-select the active session: find latest date across all projects
-    var best = null;
-    for (var g = 0; g < data.length; g++) {
-      for (var s = 0; s < data[g].sessions.length; s++) {
-        if (data[g].sessions[s].sessionId === activeSessionId) {
-          if (!best || data[g].sessions[s].date > best.date) best = data[g].sessions[s];
-        }
-      }
-    }
-    if (best) {
-      var projGroup = null;
-      for (var g = 0; g < data.length; g++) {
-        if (data[g].sessions.some(function(s) { return s.sessionId === best.sessionId; })) {
-          projGroup = data[g].project;
-          break;
-        }
-      }
-      if (projGroup) {
-        var el = document.querySelector('[data-sid="' + best.sessionId + '"][data-proj="' + esc(projGroup) + '"]');
-        if (el) selectSession(el);
-      }
-    }
-  }
-});
+loadSessions();
 </script>
 </body>
 </html>
