@@ -309,25 +309,19 @@ async function doSearch() {
 function autoSelectActive() {
   if (!activeSessionId || currentSid || data.length === 0) return;
   var best = null;
+  var bestProj = null;
   for (var g = 0; g < data.length; g++) {
     for (var s = 0; s < data[g].sessions.length; s++) {
       if (data[g].sessions[s].sessionId === activeSessionId) {
-        if (!best || data[g].sessions[s].date > best.date) best = data[g].sessions[s];
+        if (!best || data[g].sessions[s].date > best.date) {
+          best = data[g].sessions[s];
+          bestProj = data[g].project;
+        }
       }
     }
   }
-  if (!best) return;
-  // Find which project this session is in
-  var projGroup = null;
-  for (var g = 0; g < data.length; g++) {
-    if (data[g].sessions.some(function(s) { return s.sessionId === best.sessionId; })) {
-      projGroup = data[g].project;
-      break;
-    }
-  }
-  if (!projGroup) return;
-  // Find the DOM element and click it
-  var el = document.querySelector('[data-sid="' + best.sessionId + '"][data-proj="' + esc(projGroup) + '"]');
+  if (!best || !bestProj) return;
+  var el = document.querySelector('[data-sid="' + best.sessionId + '"][data-proj="' + esc(bestProj) + '"]');
   if (el) selectSession(el);
 }
 
