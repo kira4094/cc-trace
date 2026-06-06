@@ -60,11 +60,6 @@
 </div>
 <div class="body">
   <div class="sidebar">
-    <div style="padding:8px 14px;border-bottom:1px solid var(--border)">
-      <select id="project-select" style="width:100%;background:var(--surface);color:var(--text);border:1px solid var(--border);padding:5px 8px;border-radius:4px;font-size:13px;cursor:pointer">
-        <option value="">All projects</option>
-      </select>
-    </div>
     <div id="sidebar" style="overflow-y:auto;flex:1"><div class="loading">Loading...</div></div>
   </div>
   <div class="main" id="main"><div class="empty"><h2>Select a session</h2></div></div>
@@ -75,7 +70,7 @@
 </div>
 <script>
 const API = '';
-let data = []; let currentSid = null; let currentDate = null; let activeSessionId = null; let expandedGid = '';
+let data = []; let currentSid = null; let activeSessionId = null; let expandedGid = '';
 
 async function fetch_(path) {
   const r = await fetch(API + path);
@@ -101,132 +96,91 @@ async function loadSessions() {
   }
 }
 
-function populateProjects(allData) {
-  const sel = document.getElementById('project-select');
-  const projects = new Set();
-  for (const g of allData) {
-    for (const s of g.sessions) {
-      if (s.workspace) {
-        const name = s.workspace.replace(/\\/g, '/').split('/').pop();
-        projects.add(name);
-      }
-    }
-  }
-  const cur = sel.value;
-  sel.innerHTML = '<option value="">All projects</option>';
-  for (const p of [...projects].sort()) {
-    sel.innerHTML += '<option value="' + p + '">' + p + '</option>';
-  }
-  if (cur) sel.value = cur;
-}
-
 function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 function renderSidebar() {
   const sb = document.getElementById('sidebar');
-  populateProjects(data);
-  const selProj = document.getElementById('project-select').value;
-  const all = [];
-  for (const g of data) {
-    for (const s of g.sessions) {
-      if (selProj) {
-        const name = (s.workspace || '').replace(/\\/g, '/').split('/').pop() || '';
-        if (name !== selProj) continue;
+  let html = '', projIdx = 0;
+
+  for (const group of data) {
+    const projName = group.project || 'default';
+    const gid = 'p' + (projIdx++);
+
+    // Group sessions by sessionId within this project
+    const sessionMap = {};
+    for (const s of group.sessions) {
+      const sid = s.sessionId;
+      if (!sessionMap[sid]) {
+        sessionMap[sid] = {
+          sessionId: sid, title: s.title || sid.slice(0, 20),
+          dates: [], totalRecords: 0, workspace: s.workspace,
+          _latestDate: ''
+        };
       }
-      all.push(s);
-    }
-  }
-  const byTitle = {};
-  for (const s of all) {
-    const key = s.title || s.sessionId.slice(0, 16);
-    if (!byTitle[key]) byTitle[key] = { title: key, sessions: [] };
-    byTitle[key].sessions.push(s);
-  }
-  const keys = Object.keys(byTitle);
-  if (keys.length === 0) { sb.innerHTML = '<div class="empty" style="padding:30px"><h2>No sessions</h2></div>'; return; }
-  // Find the latest date for active session across ALL data (global)
-  let latestDate = '', latestKey = '';
-  let globalLatestDate = '';
-  // First pass: find the absolute latest date for this session across all projects
-  for (const g of data) {
-    for (const s of g.sessions) {
-      if (s.sessionId === activeSessionId && s.date > globalLatestDate) {
-        globalLatestDate = s.date;
+      sessionMap[sid].dates.push(s.date);
+      sessionMap[sid].totalRecords += s.recordCount;
+      if (s.date > sessionMap[sid]._latestDate) {
+        sessionMap[sid].title = s.title || sid.slice(0, 20);
+        sessionMap[sid]._latestDate = s.date;
       }
     }
-  }
-  // Second pass: find matching group (only if the global latest date falls in current filter)
-  for (const key of keys) {
-    for (const s of byTitle[key].sessions) {
-      if (s.sessionId === activeSessionId && s.date === globalLatestDate) {
-        latestDate = s.date; latestKey = key;
-      }
-    }
-  }
-  let html = '', idx = 0;
-  for (const key of keys) {
-    const g = byTitle[key];
-    const gid = 'g' + (idx++);
-    const sessions = g.sessions.sort((a, b) => b.date.localeCompare(a.date));
-    const isActive = key === latestKey;
-    const open = gid === expandedGid || (!expandedGid && isActive);
-    html += '<div class="proj-group" data-gid="' + gid + '"><div class="proj-header" onclick="toggleProj(\'' + gid + '\')"><span class="arrow ' + (open?'open':'') + '">▶</span> ' + esc(g.title) + ' <span style="margin-left:auto;font-weight:400">' + sessions.length + '</span></div><div class="proj-sessions" id="proj-' + gid + '" style="display:' + (open?'block':'none') + '">';
+
+    const sessions = Object.values(sessionMap).sort((a, b) => {
+      return Math.max(...b.dates.map(Number)) - Math.max(...a.dates.map(Number));
+    });
+
+    if (sessions.length === 0) continue;
+
+    const isOpen = gid === expandedGid;
+    html += '<div class="proj-group" data-gid="' + gid + '">';
+    html += '<div class="proj-header" onclick="toggleProj(\'' + gid + '\')">';
+    html += '<span class="arrow ' + (isOpen ? 'open' : '') + '">&#9654;</span> ';
+    html += esc(projName);
+    html += ' <span style="margin-left:auto;font-weight:400">' + sessions.length + '</span>';
+    html += '</div>';
+    html += '<div class="proj-sessions" id="proj-' + gid + '" style="display:' + (isOpen ? 'block' : 'none') + '">';
+
     for (const s of sessions) {
-      const isCur = s.sessionId === activeSessionId && s.date === latestDate;
-      const act = currentSid === s.sessionId && currentDate === s.date;
-      const dot = isCur ? '<span style="color:var(--green)">🟢</span> ' : '';
-      html += '<div class="session-item' + (act ? ' active' : '') + '" onclick="selectSession(\'' + s.date + '\',\'' + s.sessionId + '\')" data-date="' + s.date + '" data-sid="' + s.sessionId + '"><span class="title" style="padding-left:16px">' + dot + s.date + '</span><span class="count">' + s.recordCount + '</span></div>';
+      const sorted = [...s.dates].sort();
+      const range = sorted.length === 1 ? sorted[0].slice(4) : sorted[0].slice(4) + ' ~ ' + sorted[sorted.length - 1].slice(4);
+      const isActive = s.sessionId === activeSessionId;
+      const isSelected = s.sessionId === currentSid;
+      const dot = isActive ? '<span style="color:var(--green)">&#x1F7E2;</span> ' : '';
+
+      html += '<div class="session-item' + (isSelected ? ' active' : '') + '" onclick="selectSession(this)" data-sid="' + s.sessionId + '" data-proj="' + esc(projName) + '">';
+      html += '<span class="title">' + dot + esc(s.title || s.sessionId.slice(0, 20)) + '</span>';
+      html += '<span class="date">' + range + '</span>';
+      html += '<span class="count">' + s.totalRecords + '</span>';
+      html += '</div>';
     }
+
     html += '</div></div>';
   }
-  sb.innerHTML = html;
+
+  sb.innerHTML = html || '<div class="empty" style="padding:30px"><h2>No sessions</h2></div>';
 }
 
 function toggleProj(id) {
   const el = document.getElementById('proj-' + id);
   if (!el) return;
-  const wasHidden = el.style.display === 'none';
-  // Collapse all other groups, expand this one
-  document.querySelectorAll('.proj-sessions').forEach(e => { e.style.display = 'none'; });
-  document.querySelectorAll('.arrow').forEach(a => a.classList.remove('open'));
+  document.querySelectorAll('.proj-sessions').forEach(function(e) { e.style.display = 'none'; });
+  document.querySelectorAll('.arrow').forEach(function(a) { a.classList.remove('open'); });
   el.style.display = 'block';
-  const arrow = el.parentElement.querySelector('.arrow');
+  var arrow = el.parentElement.querySelector('.arrow');
   if (arrow) arrow.classList.add('open');
   expandedGid = id;
 }
 
-function selectDate(date) {
-  currentDate = date; currentSid = null;
-  document.getElementById('main').innerHTML = '<div class="empty"><h2>Select a session</h2></div>';
-  renderSidebar();
-}
-
-function projFromWs(ws) {
-  if (!ws) return 'default';
-  const parts = ws.replace(/\\/g, '/').split('/').filter(Boolean);
-  return parts[parts.length - 1] || 'default';
-}
-
-async function selectSession(date, sid) {
-  currentDate = date; currentSid = sid;
-  const dateEl = document.querySelector('[data-sid="' + sid + '"]');
-  if (dateEl) {
-    const pg = dateEl.closest('.proj-group');
-    if (pg) expandedGid = pg.getAttribute('data-gid') || '';
-  }
+async function selectSession(el) {
+  var sid = el.dataset.sid;
+  var proj = el.dataset.proj;
+  currentSid = sid;
+  var pg = el.closest('.proj-group');
+  if (pg) expandedGid = pg.getAttribute('data-gid') || '';
   renderSidebar();
   document.getElementById('main').innerHTML = '<div class="loading">Loading records...</div>';
   try {
-    // Find the workspace from data to derive project folder name
-    let ws = null;
-    for (const g of data) {
-      for (const s of g.sessions) {
-        if (s.sessionId === sid) { ws = s.workspace; break; }
-      }
-      if (ws) break;
-    }
-    const proj = projFromWs(ws);
-    const d = await fetch_('/api/sessions/' + proj + '/' + sid + '?date=' + currentDate);
+    var d = await fetch_('/api/sessions/' + proj + '/' + sid);
     renderRecords(d);
   } catch (e) {
     document.getElementById('main').innerHTML = '<div class="empty"><h2>Error</h2><p>' + e.message + '</p></div>';
@@ -327,25 +281,32 @@ try {
   if (saved === 'dark') { document.body.setAttribute('data-theme', 'dark'); document.getElementById('theme-btn').textContent = '☀'; }
 } catch {}
 
-document.getElementById('project-select').addEventListener('change', function() {
-  currentSid = null;
-  renderSidebar();
-  document.getElementById('main').innerHTML = '<div class="empty"><h2>Select a session</h2></div>';
-});
-
 updateStatus();
 setInterval(updateStatus, 10000);
 fetchActiveSession();
 setInterval(fetchActiveSession, 5000);
-loadSessions().then(() => {
+loadSessions().then(function() {
   if (activeSessionId && !currentSid) {
-    let latestDate = '';
-    for (const g of data) {
-      for (const s of g.sessions) {
-        if (s.sessionId === activeSessionId && s.date > latestDate) latestDate = s.date;
+    // Auto-select active session: find latest date across all projects
+    var best = null;
+    for (var g = 0; g < data.length; g++) {
+      for (var s = 0; s < data[g].sessions.length; s++) {
+        if (data[g].sessions[s].sessionId === activeSessionId) {
+          if (!best || data[g].sessions[s].date > best.date) best = data[g].sessions[s];
+        }
       }
     }
-    if (latestDate) selectSession(latestDate, activeSessionId);
+    if (best) {
+      // Find the DOM element for this session to call selectSession(el)
+      // Build project name from data
+      var projName = data.find(function(g) {
+        return g.sessions.some(function(s) { return s.sessionId === best.sessionId; });
+      });
+      if (projName) {
+        var el = document.querySelector('[data-sid="' + best.sessionId + '"][data-proj="' + esc(projName.project) + '"]');
+        if (el) selectSession(el);
+      }
+    }
   }
 });
 </script>
