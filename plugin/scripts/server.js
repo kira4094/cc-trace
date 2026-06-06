@@ -183,19 +183,17 @@ function getSessionGroups() {
 }
 
 /**
- * Read all records for a specific session across ALL projects.
+ * Read all records for a specific session.
  * Path: SESSIONS_DIR/<project>/<sessionId>/<date>/chunk-NNN.jsonl
+ * When project is specified, only search that project (not cross-project).
  */
 function getSessionRecords(project, sessionId, filterDate) {
   const records = [];
-  let foundProject = project || '';
-  const projects = safeReadDir(SESSIONS_DIR);
+  const projects = project ? [project] : safeReadDir(SESSIONS_DIR);
 
   for (const proj of projects) {
     const sidDir = path.join(SESSIONS_DIR, proj, sessionId);
     if (!isDirectory(sidDir)) continue;
-    if (!foundProject) foundProject = proj;
-
     const dates = safeReadDir(sidDir).sort();
     for (const date of dates) {
       if (filterDate && date !== filterDate) continue;
@@ -225,7 +223,7 @@ function getSessionRecords(project, sessionId, filterDate) {
 
   return {
     sessionId,
-    project: foundProject,
+    project: project || '',
     total: records.length,
     records,
   };
