@@ -4,6 +4,8 @@
 
 **Persistent memory for Claude Code.** Every conversation, every tool call, every decision — automatically recorded, searchable, and ready when you are. Survives `/compact`, new sessions, and restarts.
 
+[![GitHub stars](https://img.shields.io/github/stars/kira4094/cc-trace?style=social)](https://github.com/kira4094/cc-trace) <sub>⭐ Star us on GitHub!</sub>
+
 ```
 [trace[ON]] | 6proj | 14ses | http://localhost:13779
 ```

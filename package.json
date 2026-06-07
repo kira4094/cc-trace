@@ -4,6 +4,11 @@
   "description": "Persistent memory for Claude Code — zero deps, session-level isolation, keyword + AI search",
   "license": "MIT",
   "author": "kira4094",
+  "homepage": "https://github.com/kira4094/cc-trace",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kira4094/cc-trace.git"
+  },
   "bin": {
     "cc-trace": "cli.js"
   },

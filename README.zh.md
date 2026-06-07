@@ -4,6 +4,8 @@
 
 **Claude Code 的持久记忆。** 每轮对话、每次工具调用、每个决定——自动记下来，随时翻出来。`/compact` 清不掉，重启也不丢。
 
+[![GitHub stars](https://img.shields.io/github/stars/kira4094/cc-trace?style=social)](https://github.com/kira4094/cc-trace) <sub>⭐ 去 GitHub 点个 Star 吧！</sub>
+
 ```
 [trace[ON]] | 6proj | 14ses | http://localhost:13779
 ```
