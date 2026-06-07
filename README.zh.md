@@ -27,7 +27,11 @@
 
 ## 安装
 
-cc-trace 是 Claude Code 插件，不是 npm 包。直接在 Claude Code 里装：
+有两种方式，选一种就行：
+
+### 方式一：插件安装（推荐）
+
+在 Claude Code 里直接装：
 
 ```
 /plugin marketplace add kira4094/cc-trace
@@ -37,7 +41,16 @@ cc-trace 是 Claude Code 插件，不是 npm 包。直接在 Claude Code 里装�
 
 重启 Claude Code，搞定。
 
-> **之前从 npm 装过旧版本？** 那个 `@kira4094/cc-trace` 包已经弃用了，功能一样，但插件方式更省心。跑一遍上面的命令切换过来就行。
+### 方式二：npm 安装
+
+适合习惯终端的用户。装完后要跑 `cc-trace install` 注册插件：
+
+```bash
+npm install -g @kira4094/cc-trace
+cc-trace install
+```
+
+**重要：装完后必须重启 Claude Code，插件才会生效。**
 
 ### 验证是否装好了
 
@@ -47,16 +60,21 @@ cc-trace 是 Claude Code 插件，不是 npm 包。直接在 Claude Code 里装�
 
 ## 卸载
 
+### 插件方式卸载
 ```
 /plugin uninstall cc-trace
 /reload-plugins
 ```
 
-删掉所有数据：
+### npm 方式卸载
+```bash
+cc-trace uninstall --purge   # 卸载插件 + 删除数据
+npm uninstall -g @kira4094/cc-trace
+```
 
-```
-rm -rf ~/.claude-memory
-```
+重启 Claude Code。
+
+> `--purge` 会删除 `~/.claude-memory/` 目录下所有数据。如果只是想停用、保留数据以后再用，去掉 `--purge` 就行。
 
 ## 原理
 

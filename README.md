@@ -27,7 +27,11 @@
 
 ## Install
 
-cc-trace is a Claude Code plugin, not an npm package. Install it directly inside Claude Code:
+Two ways to install. Pick one:
+
+### Option 1: Plugin install (recommended)
+
+Inside Claude Code:
 
 ```
 /plugin marketplace add kira4094/cc-trace
@@ -37,7 +41,16 @@ cc-trace is a Claude Code plugin, not an npm package. Install it directly inside
 
 Restart Claude Code. That's it.
 
-> **Upgrading from the old npm version?** The `@kira4094/cc-trace` package is deprecated. Run the commands above to switch to the plugin — same functionality, simpler setup.
+### Option 2: npm install
+
+For terminal users. After installing, run `cc-trace install` to register the plugin:
+
+```bash
+npm install -g @kira4094/cc-trace
+cc-trace install
+```
+
+**Important: Restart Claude Code after installation for the plugin to activate.**
 
 ### Verify it's working
 
@@ -47,16 +60,21 @@ If the status bar doesn't show up, try `/reload-skills` or make sure cc-statusli
 
 ## Uninstall
 
+### Plugin uninstall
 ```
 /plugin uninstall cc-trace
 /reload-plugins
 ```
 
-Remove all stored data:
+### npm uninstall
+```bash
+cc-trace uninstall --purge   # unregister plugin + delete data
+npm uninstall -g @kira4094/cc-trace
+```
 
-```
-rm -rf ~/.claude-memory
-```
+Restart Claude Code.
+
+> Use `--purge` to remove all data under `~/.claude-memory/`. Omit it if you want to keep the data for future use.
 
 ## How it works
 

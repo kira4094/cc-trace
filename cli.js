@@ -7,107 +7,50 @@ const os = require('os');
 
 const HOME = os.homedir();
 const TRACE_DIR = path.join(HOME, '.claude-memory');
-const SCRIPTS_DST = path.join(TRACE_DIR, 'scripts');
-const UI_DST = path.join(TRACE_DIR, 'ui');
 const SETTINGS = path.join(HOME, '.claude', 'settings.json');
-const CLAUDE_MD = path.join(HOME, '.claude', 'CLAUDE.md');
-const SCRIPTS_SRC = path.join(__dirname, 'scripts');
-const UI_SRC = path.join(__dirname, 'ui');
+
+const PLUGIN_NAME = 'cc-trace@cc-trace';
+const MARKETPLACE_KEY = 'cc-trace';
 
 function log(m) { console.log('[cc-trace]', m); }
 function warn(m) { console.error('[cc-trace]', m); }
 
-function copyDir(src, dst) {
-  if (!fs.existsSync(src)) return 0;
-  fs.mkdirSync(dst, { recursive: true });
-  let n = 0;
-  for (const f of fs.readdirSync(src)) {
-    const s = path.join(src, f), d = path.join(dst, f);
-    if (fs.statSync(s).isFile()) { fs.copyFileSync(s, d); n++; }
-  }
-  return n;
-}
-
 function readJSON(p) { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return null; } }
 function writeJSON(p, o) { fs.writeFileSync(p, JSON.stringify(o, null, 2) + '\n'); }
 
-function hookEntry(script, async, timeout) {
-  const e = { type: 'command', command: `node ${path.join(SCRIPTS_DST, script)}` };
-  if (async) e.async = true;
-  if (timeout) e.timeout = timeout;
-  return e;
-}
-
 function cmdInstall() {
+  // 1. Create data directory
   fs.mkdirSync(TRACE_DIR, { recursive: true });
 
-  // 1. Copy scripts + UI
-  const n = copyDir(SCRIPTS_SRC, SCRIPTS_DST) + copyDir(UI_SRC, UI_DST);
-  log(`Copied ${n} files`);
-
-  // 2. Write hooks to settings.json
+  // 2. Register plugin in settings.json
   let s = readJSON(SETTINGS) || {};
-  if (!s.hooks) s.hooks = {};
-  const B = path.join(HOME, '.claude-memory', 'scripts').replace(/\\/g, '/');
-  s.hooks = {
-    Setup: [{ matcher: '*', hooks: [{ type: 'command', command: `node ${B}/server-launcher.cjs`, async: true, timeout: 30 }] }],
-    SessionStart: [{ matcher: '*', hooks: [
-      { type: 'command', command: `node ${B}/server-launcher.cjs`, async: true, timeout: 30 },
-      { type: 'command', command: `node ${B}/inject.cjs`, async: true, timeout: 10 }
-    ] }],
-    UserPromptSubmit: [{ hooks: [
-      { type: 'command', command: `node ${B}/server-launcher.cjs`, timeout: 10 },
-      { type: 'command', command: `node ${B}/capture.cjs`, timeout: 10 }
-    ] }],
-    PostToolUse: [{ matcher: '*', hooks: [{ type: 'command', command: `node ${B}/capture.cjs`, timeout: 10 }] }],
-    Stop: [{ hooks: [{ type: 'command', command: `node ${B}/summarize.cjs`, timeout: 120000 }] }]
+  if (!s.enabledPlugins) s.enabledPlugins = {};
+  s.enabledPlugins[PLUGIN_NAME] = true;
+  if (!s.extraKnownMarketplaces) s.extraKnownMarketplaces = {};
+  s.extraKnownMarketplaces[MARKETPLACE_KEY] = {
+    source: { source: 'github', repo: 'kira4094/cc-trace' }
   };
   writeJSON(SETTINGS, s);
-  log('Hooks written');
-
-  // 3. Write CLAUDE.md section
-  let cm = '';
-  try { cm = fs.readFileSync(CLAUDE_MD, 'utf8'); } catch {}
-  cm = cm.replace(/\n*## Memory \(cc-trace\)[\s\S]*?(?=\n## |$)/, '');
-  cm += `
-
-## Memory (cc-trace)
-
-You have a persistent memory system at \`~/.claude-memory/\`.
-
-The Web UI is at http://localhost:13779 — open it to browse sessions.
-
-Search past conversations:
-- \`curl -s "http://localhost:13779/api/search?q=<keywords>"\`
-
-When the user asks about past work: search immediately.
-
-`;
-  fs.writeFileSync(CLAUDE_MD, cm);
-  log('CLAUDE.md updated');
+  log('Plugin registered in settings.json');
 
   log('');
-  log('Done! Restart Claude Code to activate hooks.');
+  log('Done! Restart Claude Code to activate the plugin.');
+  log('');
+  log('  IMPORTANT: You MUST restart Claude Code for the plugin to take effect.');
 }
 
 function cmdUninstall(purge) {
   let s = readJSON(SETTINGS);
-  if (s && s.hooks) {
-    delete s.hooks.Setup; delete s.hooks.SessionStart;
-    delete s.hooks.UserPromptSubmit; delete s.hooks.PostToolUse; delete s.hooks.Stop;
-    if (Object.keys(s.hooks).length === 0) delete s.hooks;
+  if (s) {
+    if (s.enabledPlugins) delete s.enabledPlugins[PLUGIN_NAME];
+    if (s.extraKnownMarketplaces) delete s.extraKnownMarketplaces[MARKETPLACE_KEY];
     writeJSON(SETTINGS, s);
-    log('Hooks removed');
+    log('Plugin unregistered from settings.json');
   }
-  let cm = '';
-  try { cm = fs.readFileSync(CLAUDE_MD, 'utf8'); } catch {}
-  cm = cm.replace(/\n*## Memory \(cc-trace\)[\s\S]*?(?=\n## |$)/, '');
-  fs.writeFileSync(CLAUDE_MD, cm);
-  log('CLAUDE.md cleaned');
   if (purge) {
     try { fs.rmSync(TRACE_DIR, { recursive: true, force: true }); log('Data deleted'); } catch {}
   }
-  log('Uninstall complete');
+  log('Uninstall complete. Restart Claude Code to apply changes.');
 }
 
 function cmdOpen() {
@@ -138,8 +81,8 @@ function main() {
     console.log(`Usage: cc-trace <command>
 
 Commands:
-  install               Install hooks, copy scripts, set up config
-  uninstall [--purge]   Remove hooks and (with --purge) delete all data
+  install               Register cc-trace plugin and create data directory
+  uninstall [--purge]   Unregister plugin and (with --purge) delete all data
   open                  Open Web UI in browser
   status                Check server status
 `);

@@ -1,6 +1,6 @@
 {
   "name": "@kira4094/cc-trace",
-  "version": "0.9.0",
+  "version": "1.1.0",
   "description": "Persistent memory for Claude Code — zero deps, session-level isolation, keyword + AI search",
   "license": "MIT",
   "author": "kira4094",
@@ -9,10 +9,9 @@
   },
   "files": [
     "cli.js",
-    "scripts/",
-    "ui/",
-    "hooks/",
-    ".claude-plugin/"
+    "README.md",
+    "README.zh.md",
+    "LICENSE"
   ],
   "scripts": {
     "postinstall": "node -e \"console.log('[cc-trace] installed! Run: cc-trace install')\""
