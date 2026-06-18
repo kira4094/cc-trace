@@ -1,6 +1,6 @@
 {
   "name": "cc-trace",
-  "version": "v1.5.1(20260606.1412)",
+  "version": "v2.0.0(20260618.1808)",
   "description": "Persistent memory for Claude Code — session-level capture, keyword + AI search, Web UI",
   "author": {
     "name": "kira4094"
@@ -10,7 +10,9 @@
   "mcpServers": {
     "cc-trace": {
       "command": "node",
-      "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/server-launcher.js"]
+      "args": [
+        "${CLAUDE_PLUGIN_ROOT}/scripts/server-launcher.js"
+      ]
     }
   }
 }
