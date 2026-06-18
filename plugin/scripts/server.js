@@ -555,7 +555,7 @@ function start(port) {
   });
 
   server.listen(port, () => {
-    console.log(`[cc-trace] Web UI running at http://localhost:${port}`);
+    console.error(`[cc-trace] Web UI running at http://localhost:${port}`);
   });
 
   return server;

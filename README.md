@@ -17,6 +17,7 @@
 - **Two search modes** — instant keyword match + AI semantic search when keywords aren't enough
 - **Web UI** — browse sessions, projects, and memories at `http://localhost:13779`
 - **statusLine** — real-time stats in your status bar when paired with [cc-statusline](https://github.com/kira4094/cc-statusline)
+- **MCP tools** — `trace_status` and `trace_search` available as MCP tools, auto lifecycle via stdio
 
 ### Status bar reference
 
@@ -85,7 +86,11 @@ Message or tool call
   ├── hook captures it → JSONL file
   ├── AI summarizes on session end → markdown memory
   ├── next session starts → recent memories injected into prompt
-  └── Web UI serves on port 13779
+  ├── Web UI serves on port 13779
+  └── MCP server auto lifecycle (stdio)
+      ├── Claude Code starts → spawns MCP + HTTP server
+      ├── trace_status / trace_search tools available
+      └── Claude Code exits → clean shutdown, no orphans
 ```
 
 ## License

@@ -17,6 +17,7 @@
 - **两种搜索** — 关键词秒出结果，关键词不够的话 AI 语义搜索顶上
 - **Web UI** — 在浏览器里翻会话、项目、记忆，地址 `http://localhost:13779`
 - **statusLine** — 配合 [cc-statusline](https://github.com/kira4094/cc-statusline) 在状态栏看到实时统计
+- **MCP 工具** — `trace_status` 和 `trace_search` 作为 MCP 工具提供，生命周期通过 stdio 自动管理
 
 ### 状态栏说明
 
@@ -85,7 +86,11 @@ npm uninstall -g @kira4094/cc-trace
   ├── hook 捕获 → 写入 JSONL 文件
   ├── 会话结束 → AI 总结 → 写为 markdown 记忆
   ├── 新会话开始 → 最近的记忆注入到提示词
-  └── Web UI 在端口 13779 提供浏览
+  ├── Web UI 在端口 13779 提供浏览
+  └── MCP 服务器生命周期 (stdio)
+      ├── Claude Code 启动 → 自动启动 MCP + HTTP 服务
+      ├── trace_status / trace_search 工具可用
+      └── Claude Code 退出 → 自动关闭，无残留进程
 ```
 
 ## 协议
