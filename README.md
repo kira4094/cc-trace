@@ -14,10 +14,12 @@
 
 - **Auto-recording** — all messages and tool calls saved, zero config
 - **Cross-session** — pick up where you left off, even after restart
-- **Two search modes** — instant keyword match + AI semantic search when keywords aren't enough
+- **Smart search** — instant keyword match + AI semantic search when keywords aren't enough
+- **Self-improving** — analyzes cross-session patterns, automatically generates reusable Skills that Claude follows in future sessions
 - **Web UI** — browse sessions, projects, and memories at `http://localhost:13779`
 - **statusLine** — real-time stats in your status bar when paired with [cc-statusline](https://github.com/kira4094/cc-statusline)
 - **MCP tools** — `trace_status` and `trace_search` available as MCP tools, auto lifecycle via stdio
+- **Bring your own LLM** — automatically uses your Claude Code model config (Anthropic, DeepSeek, GLM, etc.), zero extra setup
 
 ### Status bar reference
 
@@ -85,7 +87,9 @@ Restart Claude Code.
 Message or tool call
   ├── hook captures it → JSONL file
   ├── AI summarizes on session end → markdown memory
-  ├── next session starts → recent memories injected into prompt
+  ├── AI analyzes cross-session patterns → generates Skills
+  │   (repeated corrections, user preferences, common workflows)
+  ├── next session starts → memories + Skills injected into prompt
   ├── Web UI serves on port 13779
   └── MCP server auto lifecycle (stdio)
       ├── Claude Code starts → spawns MCP + HTTP server
