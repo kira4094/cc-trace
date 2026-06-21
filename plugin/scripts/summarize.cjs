@@ -53,35 +53,43 @@ function scanSessions() {
   const results = [];
   if (!fs.existsSync(SESSIONS_DIR)) return results;
 
-  const dates = fs.readdirSync(SESSIONS_DIR).sort().reverse();
-  for (const date of dates) {
-    const dateDir = path.join(SESSIONS_DIR, date);
-    if (!fs.statSync(dateDir).isDirectory()) continue;
+  const projects = fs.readdirSync(SESSIONS_DIR).sort().reverse();
+  for (const proj of projects) {
+    const projDir = path.join(SESSIONS_DIR, proj);
+    if (!fs.statSync(projDir).isDirectory()) continue;
+    // Skip old date-format directories (pre-v2.0.0 flat structure)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(proj)) continue;
 
-    const sessionDirs = fs.readdirSync(dateDir).sort().reverse();
-    for (const sid of sessionDirs) {
-      const sessionDir = path.join(dateDir, sid);
-      if (!fs.statSync(sessionDir).isDirectory()) continue;
+    const sessionIds = fs.readdirSync(projDir).sort().reverse();
+    for (const sid of sessionIds) {
+      const sidDir = path.join(projDir, sid);
+      if (!fs.statSync(sidDir).isDirectory()) continue;
 
-      const chunkFiles = fs
-        .readdirSync(sessionDir)
-        .filter((f) => f.startsWith("chunk-") && f.endsWith(".jsonl"))
-        .sort();
-
+      const dateDirs = fs.readdirSync(sidDir, { withFileTypes: true });
       const records = [];
-      for (const chunk of chunkFiles) {
-        try {
-          const raw = fs.readFileSync(path.join(sessionDir, chunk), "utf8");
-          for (const line of raw.trim().split("\n").filter(Boolean)) {
-            try {
-              records.push(JSON.parse(line));
-            } catch {}
-          }
-        } catch {}
+      let latestDate = '';
+
+      for (const dd of dateDirs) {
+        if (!dd.isDirectory()) continue;
+        if (dd.name > latestDate) latestDate = dd.name;
+        const dateDir = path.join(sidDir, dd.name);
+
+        const chunks = fs.readdirSync(dateDir)
+          .filter((f) => f.startsWith("chunk-") && f.endsWith(".jsonl"))
+          .sort();
+
+        for (const chunk of chunks) {
+          try {
+            const raw = fs.readFileSync(path.join(dateDir, chunk), "utf8");
+            for (const line of raw.trim().split("\n").filter(Boolean)) {
+              try { records.push(JSON.parse(line)); } catch {}
+            }
+          } catch {}
+        }
       }
 
       if (records.length > 0) {
-        results.push({ sessionDir, sessionId: sid, date, records });
+        results.push({ sessionDir: sidDir, sessionId: sid, date: latestDate, records });
       }
     }
   }

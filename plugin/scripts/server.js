@@ -330,7 +330,7 @@ function serveStaticFile(res, urlPath) {
 
   const stream = fs.createReadStream(targetPath);
   stream.on("error", () => {
-    sendError(res, "Internal server error", 500);
+    if (!res.headersSent) sendError(res, "Internal server error", 500);
   });
   stream.on("open", () => {
     res.writeHead(200, {
@@ -547,18 +547,38 @@ async function handleRequest(req, res) {
 
 // ── Server startup ──────────────────────────────────────────────────────
 
-function start(port) {
-  const server = http.createServer(handleRequest);
+function start(port, host, retries) {
+  host = host || '127.0.0.1';
+  const MAX_RETRIES = retries || 3;
+  const pidFile = path.join(TRACE_DIR, "server.pid");
 
-  server.on("error", (err) => {
-    console.error("[cc-trace] Server error:", err.message);
-  });
+  function attempt(n) {
+    const server = http.createServer(handleRequest);
 
-  server.listen(port, () => {
-    console.error(`[cc-trace] Web UI running at http://localhost:${port}`);
-  });
+    server.on("error", (err) => {
+      if (err.code === 'EADDRINUSE' && n < MAX_RETRIES) {
+        console.error(`[cc-trace] Port ${port} in use, retry ${n + 1}/${MAX_RETRIES}...`);
+        // Try to kill stale server via PID file
+        try {
+          const oldPid = parseInt(fs.readFileSync(pidFile, 'utf8').trim(), 10);
+          if (oldPid && oldPid !== process.pid) {
+            const { spawnSync } = require('child_process');
+            spawnSync('taskkill', ['/PID', String(oldPid), '/F'], { timeout: 3000 });
+          }
+        } catch {}
+        setTimeout(() => attempt(n + 1), 1000);
+      } else {
+        console.error("[cc-trace] Server error:", err.message);
+      }
+    });
 
-  return server;
+    server.listen(port, host, () => {
+      try { fs.writeFileSync(pidFile, String(process.pid)); } catch {}
+      console.error(`[cc-trace] Web UI running at http://${host}:${port}`);
+    });
+  }
+
+  attempt(0);
 }
 
 // ── Self-start ──────────────────────────────────────────────────────────
