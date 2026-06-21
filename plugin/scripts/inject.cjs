@@ -19,10 +19,39 @@ const HOME = os.homedir();
 const TRACE_DIR = path.join(HOME, ".claude-memory");
 const MEMORY_DIR = path.join(TRACE_DIR, "memory");
 const MEMORY_INDEX = path.join(MEMORY_DIR, "MEMORY.md");
+const SKILLS_INDEX = path.join(TRACE_DIR, "skills", "SKILLS.md");
 const CLAUDE_MD = path.join(HOME, ".claude", "CLAUDE.md");
+const MAX_SKILLS = 5;
 const MAX_ENTRIES = 3;
 
 // ── Helpers ─────────────────────────────────────────────────────────
+
+function parseIndex(filePath) {
+  const entries = [];
+  try {
+    if (!fs.existsSync(filePath)) return entries;
+    const content = fs.readFileSync(filePath, "utf8");
+    const lineRe = /^\s*-\s+\[([^\]]+)\]\s*(.*)?$/;
+    for (const line of content.split("\n")) {
+      const m = line.match(lineRe);
+      if (m) entries.push({ name: m[1].trim(), desc: (m[2] || "").trim() });
+    }
+  } catch {}
+  return entries;
+}
+
+/** Remove or replace an existing section in CLAUDE.md between marker and next ## */
+function replaceSection(existing, marker, newBlock) {
+  const idx = existing.indexOf(marker);
+  if (idx === -1) return null; // not found
+  const afterMarker = existing.slice(idx + marker.length);
+  const nextSectionIdx = afterMarker.search(/\n## /);
+  const beforeSection = existing.slice(0, idx);
+  const afterSection = nextSectionIdx !== -1
+    ? existing.slice(idx + marker.length + nextSectionIdx)
+    : "";
+  return (beforeSection + afterSection).trimEnd();
+}
 
 /** Parse MEMORY.md index file. Returns array of { title, filename, description } in list order. */
 function parseMemoryIndex(filePath) {
@@ -171,9 +200,35 @@ function main() {
   }
 
   // 5. Append snapshot block
-  const newContent = existingContent.endsWith("\n") || existingContent === ""
+  let newContent = existingContent.endsWith("\n") || existingContent === ""
     ? existingContent + snapshotBlock.trimStart()
     : existingContent + "\n" + snapshotBlock.trimStart();
+
+  // 6. Inject active skills
+  const skills = parseIndex(SKILLS_INDEX);
+  if (skills.length > 0) {
+    const skillsLines = [];
+    skillsLines.push("");
+    skillsLines.push("## Active Skills (cc-trace)");
+    skillsLines.push("");
+    for (const skill of skills.slice(0, MAX_SKILLS)) {
+      skillsLines.push(`- ${skill.name}: ${skill.desc.slice(0, 120)}`);
+    }
+    skillsLines.push("");
+
+    const skillsBlock = skillsLines.join("\n");
+    const skillsMarker = "## Active Skills (cc-trace)";
+
+    // Replace or append skills block
+    const skillsIdx = newContent.indexOf(skillsMarker);
+    if (skillsIdx !== -1) {
+      const replaced = replaceSection(newContent, skillsMarker, skillsBlock);
+      if (replaced) newContent = replaced;
+    }
+    newContent = newContent.endsWith("\n") || newContent === ""
+      ? newContent + skillsBlock.trimStart()
+      : newContent + "\n" + skillsBlock.trimStart();
+  }
 
   try {
     fs.writeFileSync(CLAUDE_MD, newContent, "utf8");
