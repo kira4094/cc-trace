@@ -186,8 +186,8 @@ function main() {
     const existingBlockText = existingBlock.trim();
 
     if (newBlockText === existingBlockText) {
-      // Already up to date — skip
-      process.exit(0);
+      // Memory snapshot unchanged — keep current content, proceed to skills
+      // (don't exit early; skills may need updating)
     }
 
     // Content differs: remove old block and re-append fresh
