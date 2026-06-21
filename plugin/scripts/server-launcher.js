@@ -1,7 +1,28 @@
 #!/usr/bin/env node
-// cc-trace MCP server — identical MCP handling to mcp-test.js
+// cc-trace MCP server
 process.stdin.setEncoding("utf8");
 let buf = "";
+
+function httpGet(url) {
+  return new Promise((resolve) => {
+    require("http").get(url, (res) => {
+      let d = ""; res.on("data", (c) => (d += c));
+      res.on("end", () => resolve(d));
+    }).on("error", () => resolve(null));
+  });
+}
+
+async function httpGetRetry(url, retries, delay) {
+  retries = retries || 5;
+  delay = delay || 400;
+  for (let i = 0; i < retries; i++) {
+    const result = await httpGet(url);
+    if (result !== null) return result;
+    if (i < retries - 1) await new Promise((r) => setTimeout(r, delay));
+  }
+  return null;
+}
+
 process.stdin.on("data", (chunk) => {
   buf += chunk;
   const lines = buf.split("\n");
@@ -25,15 +46,14 @@ process.stdin.on("data", (chunk) => {
       const n = m.params.name;
       const a = m.params.arguments;
       if (n === "trace_status") {
-        const http = require("http");
-        http.get("http://localhost:13779/api/status", (res) => {
-          let d = ""; res.on("data", c => d += c); res.on("end", () => process.stdout.write(JSON.stringify({jsonrpc:"2.0",id:m.id,result:{content:[{type:"text",text:d}]}}) + "\n"));
-        }).on("error", () => process.stdout.write(JSON.stringify({jsonrpc:"2.0",id:m.id,result:{content:[{type:"text",text:"Server not ready"}]}}) + "\n"));
+        httpGetRetry("http://localhost:13779/api/status").then((body) => {
+          process.stdout.write(JSON.stringify({jsonrpc:"2.0",id:m.id,result:{content:[{type:"text",text:body || "Server not ready"}]}}) + "\n");
+        });
       } else if (n === "trace_search" && a && a.query) {
-        const http = require("http");
-        http.get("http://localhost:13779/api/search?q=" + encodeURIComponent(a.query), (res) => {
-          let d = ""; res.on("data", c => d += c); res.on("end", () => process.stdout.write(JSON.stringify({jsonrpc:"2.0",id:m.id,result:{content:[{type:"text",text:d}]}}) + "\n"));
-        }).on("error", () => process.stdout.write(JSON.stringify({jsonrpc:"2.0",id:m.id,error:{code:-32603,message:"Search failed"}}) + "\n"));
+        httpGetRetry("http://localhost:13779/api/search?q=" + encodeURIComponent(a.query)).then((body) => {
+          if (body) process.stdout.write(JSON.stringify({jsonrpc:"2.0",id:m.id,result:{content:[{type:"text",text:body}]}}) + "\n");
+          else process.stdout.write(JSON.stringify({jsonrpc:"2.0",id:m.id,error:{code:-32603,message:"Search failed"}}) + "\n");
+        });
       } else {
         process.stdout.write(JSON.stringify({jsonrpc:"2.0",id:m.id,error:{code:-32601,message:"Not found"}}) + "\n");
       }
