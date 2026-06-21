@@ -259,9 +259,34 @@ async function main() {
   const isCheckpoint = args.includes("--checkpoint");
 
   try {
+    // 0. Check if analysis is needed — skip if no new session data
+    const LAST_ANALYZE = path.join(TRACE_DIR, "last-analyze.txt");
+    const now = new Date().toISOString();
+    try {
+      if (fs.existsSync(LAST_ANALYZE)) {
+        const lastRun = fs.readFileSync(LAST_ANALYZE, "utf8").trim();
+        // Only skip if last run was less than 5 minutes ago (avoid re-analysis on reload)
+        const elapsed = Date.now() - new Date(lastRun).getTime();
+        if (elapsed < 300000) return; // 5 minutes
+      }
+    } catch {}
+
     // 1. Scan all sessions
     const allSessions = scanAllSessions();
     if (allSessions.length === 0) return;
+
+    // Check if any session has activity since our last analysis
+    try {
+      if (fs.existsSync(LAST_ANALYZE)) {
+        const lastRun = fs.readFileSync(LAST_ANALYZE, "utf8").trim();
+        const hasNewActivity = allSessions.some((s) => {
+          // Check the latest record timestamp
+          const lastRecord = s.records[s.records.length - 1];
+          return lastRecord && lastRecord.ts && lastRecord.ts > lastRun;
+        });
+        if (!hasNewActivity) return; // No new sessions, skip analysis
+      }
+    } catch {}
 
     // 2. For checkpoint mode, only analyze sessions not yet processed
     let sessions = allSessions;
@@ -412,6 +437,9 @@ async function main() {
       updateSkillIndex(name, desc);
       console.error(`[cc-trace] Skill generated: ${name} — ${desc}`);
     }
+
+    // 9. Record analysis timestamp
+    try { fs.writeFileSync(LAST_ANALYZE, now, "utf8"); } catch {}
   } catch (e) {
     // Silent failure — always exit 0
   }
