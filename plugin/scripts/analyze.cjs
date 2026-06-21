@@ -257,26 +257,26 @@ async function main() {
 
     // 4. Call AI to find patterns (strict thresholds)
     const systemPrompt =
-      "You are a pattern analyzer for a developer's Claude Code usage. " +
-      "Be STRICT: only extract patterns that meet ALL criteria:\n\n" +
-      "ACCEPT only if:\n" +
-      "- The pattern appears in 2+ DIFFERENT sessions (cross-session evidence), OR\n" +
-      "- The user explicitly said '记住', '以后都用', 'always', 'never', '不要再用', or similar memorization language, OR\n" +
-      "- The user CORRECTED Claude on the same topic 2+ times\n\n" +
-      "REJECT if:\n" +
-      "- One-off conversation topic (e.g. asking about gold prices once is NOT a pattern)\n" +
-      "- Generic instructions that don't apply to Claude's behavior\n" +
-      "- Project-specific implementation details\n\n" +
-      "Output as JSON array:\n" +
-      "- name: short kebab-case id\n" +
-      "- description: one-line summary\n" +
-      "- trigger: when does this rule apply?\n" +
-      "- instructions: what should Claude do (2-3 sentences)\n" +
-      "- evidence: which sessions and EXACT QUOTES show this pattern\n" +
-      "- confidence: number 0-1, how sure this is a real reusable pattern\n\n" +
-      "Only output patterns with confidence >= 0.7. If none qualify, output []";
+      "你是一个 Claude Code 使用模式分析器。请用中文输出。\n" +
+      "严格筛选：只有同时满足以下所有条件的模式才输出：\n\n" +
+      "接受标准：\n" +
+      "- 同一个模式出现在 2+ 个不同会话中（跨 session 证据），或者\n" +
+      "- 用户明确说了'记住'、'以后都用'、'always'、'never'、'不要再用'、'禁止'等记忆类语言，或者\n" +
+      "- 用户对同一问题纠正 Claude 2 次以上\n\n" +
+      "拒绝标准：\n" +
+      "- 一次性话题（如只问过一次黄金价格 → 不是模式）\n" +
+      "- 通用指令（与 Claude 行为无关的）\n" +
+      "- 项目特定的实现细节\n\n" +
+      "输出为 JSON 数组，每项包含：\n" +
+      "- name: 短 kebab-case ID（英文）\n" +
+      "- description: 中文一句话总结\n" +
+      "- trigger: 什么情况下触发（中文）\n" +
+      "- instructions: Claude 应该怎么做（中文，2-3句）\n" +
+      "- evidence: 哪些 session 的什么对话证明这个模式（中文，引用原文）\n" +
+      "- confidence: 0-1 数字，这个模式有多可靠\n\n" +
+      "只输出 confidence >= 0.7 的模式。用 ```json 和 ``` 包裹 JSON 输出。没有合格模式就输出空数组 []。";
 
-    const userPrompt = `Analyze the following session history for repeatable patterns:\n\n${sessionSummary}`;
+    const userPrompt = `分析以下会话历史，找出可重复使用的模式：\n\n${sessionSummary}`;
 
     // Retry up to 3 times for API reliability
     let analysis = null;
@@ -385,17 +385,16 @@ async function main() {
         console.error(`[cc-trace] Skill skipped (duplicate): ${name}`);
         continue;
       }
-      // Skip if similar description already exists
-      const descWords = desc.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
-      if (descWords.length > 2) {
-        const similar = existingDesc.some((ed) => {
-          const common = descWords.filter((w) => ed.includes(w));
-          return common.length >= Math.min(3, descWords.length);
-        });
-        if (similar) {
-          console.error(`[cc-trace] Skill skipped (similar exists): ${name}`);
-          continue;
-        }
+      // Skip if similar description already exists (handles Chinese)
+      const descKey = desc.toLowerCase().replace(/[^a-z一-鿿]/g, '').slice(0, 30);
+      const similar = existingDesc.some((ed) => {
+        const edKey = ed.toLowerCase().replace(/[^a-z一-鿿]/g, '').slice(0, 30);
+        // Check if one contains the other (handles Chinese-English duplicate pairs)
+        return descKey.includes(edKey) || edKey.includes(descKey);
+      });
+      if (similar) {
+        console.error(`[cc-trace] Skill skipped (similar exists): ${name}`);
+        continue;
       }
 
       writeSkillFile(name, desc, trigger, instructions, evidence);
