@@ -56,6 +56,27 @@ function ensureDir(dir) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
 
+/** Extract meaningful Chinese/English keywords for dedup comparison */
+function skillKeywords(text) {
+  const cleaned = text.toLowerCase()
+    .replace(/[^a-z0-9一-鿿]/g, ' ')
+    .replace(/\b(claude|git|use|do|not|the|and|or|for|to|in|of|is|are|be|will|can|when|should|if|with|this|that|code|project|user|make|change|work)\b/g, ' ')
+    .replace(/使用|进行|可以|代码|修改|操作|需要|允许|如果|或者|不要|自动|明确|优先|应该|用户|基于|相关|项目|工作|方式|时候|场景/g, ' ');
+  return cleaned.split(/\s+/).filter(w => w.length >= 2);
+}
+
+/** Check if two descriptions are semantically the same skill */
+function isSameSkill(desc1, desc2) {
+  const k1 = skillKeywords(desc1);
+  const k2 = skillKeywords(desc2);
+  if (k1.length === 0 || k2.length === 0) return desc1.includes(desc2) || desc2.includes(desc1);
+  // Count how many keywords overlap
+  const common = k1.filter(w => k2.includes(w));
+  // Consider same if ≥50% of shorter keyword list overlaps
+  const minLen = Math.min(k1.length, k2.length);
+  return common.length >= minLen * 0.5;
+}
+
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -358,11 +379,7 @@ async function main() {
     const merged = [];
     for (const p of patterns) {
       const desc = (p.description || '').toLowerCase();
-      const isDuplicate = merged.some((m) => {
-        const md = (m.description || '').toLowerCase();
-        // Check if one description contains the other
-        return desc.includes(md) || md.includes(desc);
-      });
+      const isDuplicate = merged.some((m) => isSameSkill(desc, (m.description || '').toLowerCase()));
       if (!isDuplicate) merged.push(p);
     }
     patterns = merged;
@@ -371,7 +388,6 @@ async function main() {
     // 8. Dedup against existing skills, then write new ones
     const existingSkills = loadSkillIndex();
     const existingNames = new Set(existingSkills.map((s) => s.name));
-    const existingDesc = existingSkills.map((s) => s.desc.toLowerCase());
 
     for (const p of patterns) {
       const name = (p.name || "").toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "") || `skill-${Date.now()}`;
@@ -382,16 +398,11 @@ async function main() {
 
       // Skip if skill name already exists
       if (existingNames.has(name)) {
-        console.error(`[cc-trace] Skill skipped (duplicate): ${name}`);
+        console.error(`[cc-trace] Skill skipped (duplicate name): ${name}`);
         continue;
       }
-      // Skip if similar description already exists (handles Chinese)
-      const descKey = desc.toLowerCase().replace(/[^a-z一-鿿]/g, '').slice(0, 30);
-      const similar = existingDesc.some((ed) => {
-        const edKey = ed.toLowerCase().replace(/[^a-z一-鿿]/g, '').slice(0, 30);
-        // Check if one contains the other (handles Chinese-English duplicate pairs)
-        return descKey.includes(edKey) || edKey.includes(descKey);
-      });
+      // Skip if similar description already exists (keyword overlap)
+      const similar = existingSkills.some((s) => isSameSkill(desc, s.desc));
       if (similar) {
         console.error(`[cc-trace] Skill skipped (similar exists): ${name}`);
         continue;
