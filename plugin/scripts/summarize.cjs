@@ -148,7 +148,6 @@ function callAI(systemPrompt, userPrompt) {
       return;
     }
 
-    const cfg = getApiConfig();
   const body = JSON.stringify({
       model: cfg.model,
       messages: [
