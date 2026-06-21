@@ -330,7 +330,45 @@ async function main() {
 
     if (!patterns || !Array.isArray(patterns) || patterns.length === 0) return;
 
-    // 6. Dedup against existing skills, then write new ones
+    // 6. Post-process: filter low-quality patterns
+    const sessionIdRe = /[0-9a-f]{8}[0-9a-f-]*/gi;
+    patterns = patterns.filter((p) => {
+      // Confidence check: default to 0 if missing
+      const conf = typeof p.confidence === 'number' ? p.confidence : 0;
+      if (conf < 0.7) return false;
+
+      // Evidence check: count unique session IDs mentioned
+      const evidence = (p.evidence || '') + ' ' + (p.description || '') + ' ' + (p.trigger || '');
+      const sessionMatches = evidence.match(sessionIdRe) || [];
+      const uniqueSessions = new Set(sessionMatches);
+      // Require 2+ sessions, unless user used memorization keywords
+      const hasMemoryKeywords = /记住|以后都用|always|never|不要再用|禁止|全局规则/i.test(evidence);
+      if (uniqueSessions.size < 2 && !hasMemoryKeywords) return false;
+
+      // Name must be reasonable length
+      const name = (p.name || '').toLowerCase().replace(/[^a-z0-9-]/g, '-');
+      if (name.length < 5 || name === 'skill-') return false;
+
+      return true;
+    });
+
+    if (patterns.length === 0) return;
+
+    // 7. Dedup within new patterns (merge similar descriptions)
+    const merged = [];
+    for (const p of patterns) {
+      const desc = (p.description || '').toLowerCase();
+      const isDuplicate = merged.some((m) => {
+        const md = (m.description || '').toLowerCase();
+        // Check if one description contains the other
+        return desc.includes(md) || md.includes(desc);
+      });
+      if (!isDuplicate) merged.push(p);
+    }
+    patterns = merged;
+    if (patterns.length === 0) return;
+
+    // 8. Dedup against existing skills, then write new ones
     const existingSkills = loadSkillIndex();
     const existingNames = new Set(existingSkills.map((s) => s.name));
     const existingDesc = existingSkills.map((s) => s.desc.toLowerCase());
