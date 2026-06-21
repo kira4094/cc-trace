@@ -60,5 +60,8 @@ process.stdin.on("data", (chunk) => {
     }
   }
 });
-process.stdin.on("end", () => { process.exit(0); });
+function die() { process.exit(0); }
+process.stdin.on("end", die);
+process.stdin.on("error", die);
+process.stdin.on("close", die);
 console.error("[cc-trace] MCP ready");
