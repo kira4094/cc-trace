@@ -26,16 +26,26 @@ const MAX_RESULTS = 10;
 const CONTEXT_WINDOW = 2; // records before/after match
 const AI_FALLBACK_THRESHOLD = 3; // if keyword returns < this, try AI
 
-// ── Helpers ──────────────────────────────────────────────────────
+// ── LLM Config ───────────────────────────────────────────────────
 
-function getApiKey() {
+function getApiConfig() {
   try {
     const s = JSON.parse(fs.readFileSync(SETTINGS_PATH, "utf8"));
-    return s?.env?.ANTHROPIC_AUTH_TOKEN || "";
+    const env = s?.env || {};
+    let baseUrl = (env.ANTHROPIC_BASE_URL || "https://api.deepseek.com").replace(/\/+$/, "");
+    baseUrl = baseUrl.replace(/\/anthropic\/?$/, "");
+    const model = (env.ANTHROPIC_MODEL || "deepseek-v4-flash").replace(/\[.*?\]/g, "").trim();
+    return {
+      apiUrl: baseUrl + "/v1/chat/completions",
+      model,
+      apiKey: env.ANTHROPIC_AUTH_TOKEN || "",
+    };
   } catch {
-    return "";
+    return { apiUrl: "https://api.deepseek.com/v1/chat/completions", model: "deepseek-v4-flash", apiKey: "" };
   }
 }
+
+// ── Helpers ──────────────────────────────────────────────────────
 
 function fmtTokens(n) {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + "M";
@@ -136,8 +146,8 @@ function keywordSearch(query, sessions) {
 /** AI semantic search via DeepSeek */
 function aiSearch(query, sessions) {
   return new Promise((resolve) => {
-    const apiKey = getApiKey();
-    if (!apiKey) {
+    const cfg = getApiConfig();
+    if (!cfg.apiKey) {
       resolve({ error: "No API key found for AI search" });
       return;
     }
@@ -155,7 +165,7 @@ function aiSearch(query, sessions) {
     }
 
     const body = JSON.stringify({
-      model: "deepseek-v4-flash",
+      model: cfg.model,
       messages: [
         {
           role: "system",
@@ -172,12 +182,12 @@ function aiSearch(query, sessions) {
     });
 
     const req = https.request(
-      "https://api.deepseek.com/v1/chat/completions",
+      cfg.apiUrl,
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
+          Authorization: `Bearer ${cfg.apiKey}`,
         },
         timeout: 10000,
       },

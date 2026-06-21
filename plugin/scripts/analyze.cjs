@@ -27,25 +27,33 @@ const SKILLS_INDEX = path.join(SKILLS_DIR, "SKILLS.md");
 const SETTINGS_PATH = path.join(HOME, ".claude", "settings.json");
 const CONFIG_PATH = path.join(TRACE_DIR, "config.json");
 
-const API_URL = "https://api.deepseek.com/v1/chat/completions";
-const MODEL = "deepseek-v4-flash";
-const MAX_TOKENS = 1000;
+const MAX_TOKENS = 4000;
 const TEMPERATURE = 0.3;
 const MAX_SESSIONS_FOR_ANALYSIS = 20; // cap sessions to avoid token blowup
+
+// ── LLM Config ───────────────────────────────────────────────────
+
+function getApiConfig() {
+  try {
+    const s = JSON.parse(fs.readFileSync(SETTINGS_PATH, "utf8"));
+    const env = s?.env || {};
+    let baseUrl = (env.ANTHROPIC_BASE_URL || "https://api.deepseek.com").replace(/\/+$/, "");
+    baseUrl = baseUrl.replace(/\/anthropic\/?$/, "");
+    const model = (env.ANTHROPIC_MODEL || "deepseek-v4-flash").replace(/\[.*?\]/g, "").trim();
+    return {
+      apiUrl: baseUrl + "/v1/chat/completions",
+      model,
+      apiKey: env.ANTHROPIC_AUTH_TOKEN || "",
+    };
+  } catch {
+    return { apiUrl: "https://api.deepseek.com/v1/chat/completions", model: "deepseek-v4-flash", apiKey: "" };
+  }
+}
 
 // ── Helpers ────────────────────────────────────────────────────────
 
 function ensureDir(dir) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-}
-
-function getApiKey() {
-  try {
-    const s = JSON.parse(fs.readFileSync(SETTINGS_PATH, "utf8"));
-    return s?.env?.ANTHROPIC_AUTH_TOKEN || "";
-  } catch {
-    return "";
-  }
 }
 
 function todayStr() {
@@ -114,14 +122,14 @@ function loadSkillIndex() {
   return entries;
 }
 
-/** Call DeepSeek API for analysis */
+/** Call configured LLM API for analysis */
 function callAI(systemPrompt, userPrompt) {
   return new Promise((resolve) => {
-    const apiKey = getApiKey();
-    if (!apiKey) { resolve(null); return; }
+    const cfg = getApiConfig();
+    if (!cfg.apiKey) { resolve(null); return; }
 
     const body = JSON.stringify({
-      model: MODEL,
+      model: cfg.model,
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt.slice(0, 60000) },
@@ -131,12 +139,12 @@ function callAI(systemPrompt, userPrompt) {
     });
 
     const req = https.request(
-      API_URL,
+      cfg.apiUrl,
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
+          Authorization: `Bearer ${cfg.apiKey}`,
           "User-Agent": "cc-trace/1.0",
         },
         timeout: 60000,

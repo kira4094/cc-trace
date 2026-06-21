@@ -22,26 +22,36 @@ const SESSIONS_DIR = path.join(TRACE_DIR, "sessions");
 const MEMORY_DIR = path.join(TRACE_DIR, "memory");
 const SETTINGS_PATH = path.join(HOME, ".claude", "settings.json");
 
-const API_URL = "https://api.deepseek.com/v1/chat/completions";
-const MODEL = "deepseek-v4-flash";
-const MAX_TOKENS = 800;
+const MAX_TOKENS = 4000;
 const TEMPERATURE = 0.3;
 const MAX_RECORDS_SUMMARY = 200; // cap records sent to AI to avoid token blowup
 const CHECKPOINT_THRESHOLD = 5; // minimum new records to bother summarizing
+
+// ── LLM Config ───────────────────────────────────────────────────
+// Reads ANTHROPIC_AUTH_TOKEN, ANTHROPIC_BASE_URL, ANTHROPIC_MODEL
+// from Claude Code settings.json — zero config for users.
+
+function getApiConfig() {
+  try {
+    const s = JSON.parse(fs.readFileSync(SETTINGS_PATH, "utf8"));
+    const env = s?.env || {};
+    let baseUrl = (env.ANTHROPIC_BASE_URL || "https://api.deepseek.com").replace(/\/+$/, "");
+    baseUrl = baseUrl.replace(/\/anthropic\/?$/, ""); // strip Anthropic proxy path
+    const model = (env.ANTHROPIC_MODEL || "deepseek-v4-flash").replace(/\[.*?\]/g, "").trim();
+    return {
+      apiUrl: baseUrl + "/v1/chat/completions",
+      model,
+      apiKey: env.ANTHROPIC_AUTH_TOKEN || "",
+    };
+  } catch {
+    return { apiUrl: "https://api.deepseek.com/v1/chat/completions", model: "deepseek-v4-flash", apiKey: "" };
+  }
+}
 
 // ── Helpers ──────────────────────────────────────────────────────
 
 function ensureDir(dir) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-}
-
-function getApiKey() {
-  try {
-    const s = JSON.parse(fs.readFileSync(SETTINGS_PATH, "utf8"));
-    return s?.env?.ANTHROPIC_AUTH_TOKEN || "";
-  } catch {
-    return "";
-  }
 }
 
 function todayStr() {
@@ -132,14 +142,15 @@ function formatRecordsForPrompt(records) {
 /** Call DeepSeek API and return the response text */
 function callAI(systemPrompt, userPrompt) {
   return new Promise((resolve) => {
-    const apiKey = getApiKey();
-    if (!apiKey) {
+    const cfg = getApiConfig();
+    if (!cfg.apiKey) {
       resolve(null);
       return;
     }
 
-    const body = JSON.stringify({
-      model: MODEL,
+    const cfg = getApiConfig();
+  const body = JSON.stringify({
+      model: cfg.model,
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt.slice(0, 60000) },
@@ -149,12 +160,12 @@ function callAI(systemPrompt, userPrompt) {
     });
 
     const req = https.request(
-      API_URL,
+      cfg.apiUrl,
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
+          Authorization: `Bearer ${cfg.apiKey}`,
           "User-Agent": "cc-trace/1.0",
         },
         timeout: 30000,
