@@ -255,20 +255,26 @@ async function main() {
     // 3. Build session summary for AI
     const sessionSummary = buildSessionSummary(sessions.slice(0, MAX_SESSIONS_FOR_ANALYSIS));
 
-    // 4. Call AI to find patterns
+    // 4. Call AI to find patterns (strict thresholds)
     const systemPrompt =
       "You are a pattern analyzer for a developer's Claude Code usage. " +
-      "Analyze the conversation history and find REPEATED patterns:\n" +
-      "1. User preferences (tools, workflows, styles the user consistently chooses)\n" +
-      "2. Corrections (times when Claude did something wrong and user fixed it)\n" +
-      "3. Common workflows (tasks the user does repeatedly with the same steps)\n\n" +
-      "For each pattern found, output as a JSON array of objects with:\n" +
-      "- name: short kebab-case id (e.g. 'prefer-pnpm')\n" +
+      "Be STRICT: only extract patterns that meet ALL criteria:\n\n" +
+      "ACCEPT only if:\n" +
+      "- The pattern appears in 2+ DIFFERENT sessions (cross-session evidence), OR\n" +
+      "- The user explicitly said '记住', '以后都用', 'always', 'never', '不要再用', or similar memorization language, OR\n" +
+      "- The user CORRECTED Claude on the same topic 2+ times\n\n" +
+      "REJECT if:\n" +
+      "- One-off conversation topic (e.g. asking about gold prices once is NOT a pattern)\n" +
+      "- Generic instructions that don't apply to Claude's behavior\n" +
+      "- Project-specific implementation details\n\n" +
+      "Output as JSON array:\n" +
+      "- name: short kebab-case id\n" +
       "- description: one-line summary\n" +
       "- trigger: when does this rule apply?\n" +
       "- instructions: what should Claude do (2-3 sentences)\n" +
-      "- evidence: which sessions show this pattern\n\n" +
-      "ONLY output the JSON array, no other text. If no clear patterns found, output []";
+      "- evidence: which sessions and EXACT QUOTES show this pattern\n" +
+      "- confidence: number 0-1, how sure this is a real reusable pattern\n\n" +
+      "Only output patterns with confidence >= 0.7. If none qualify, output []";
 
     const userPrompt = `Analyze the following session history for repeatable patterns:\n\n${sessionSummary}`;
 
@@ -324,13 +330,35 @@ async function main() {
 
     if (!patterns || !Array.isArray(patterns) || patterns.length === 0) return;
 
-    // 6. Write skill files
+    // 6. Dedup against existing skills, then write new ones
+    const existingSkills = loadSkillIndex();
+    const existingNames = new Set(existingSkills.map((s) => s.name));
+    const existingDesc = existingSkills.map((s) => s.desc.toLowerCase());
+
     for (const p of patterns) {
       const name = (p.name || "").toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "") || `skill-${Date.now()}`;
       const desc = p.description || "Auto-detected pattern";
       const trigger = p.trigger || "Unknown";
       const instructions = p.instructions || "Follow user preferences from conversation history.";
       const evidence = p.evidence || "Detected by cc-trace analyze";
+
+      // Skip if skill name already exists
+      if (existingNames.has(name)) {
+        console.error(`[cc-trace] Skill skipped (duplicate): ${name}`);
+        continue;
+      }
+      // Skip if similar description already exists
+      const descWords = desc.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
+      if (descWords.length > 2) {
+        const similar = existingDesc.some((ed) => {
+          const common = descWords.filter((w) => ed.includes(w));
+          return common.length >= Math.min(3, descWords.length);
+        });
+        if (similar) {
+          console.error(`[cc-trace] Skill skipped (similar exists): ${name}`);
+          continue;
+        }
+      }
 
       writeSkillFile(name, desc, trigger, instructions, evidence);
       updateSkillIndex(name, desc);
