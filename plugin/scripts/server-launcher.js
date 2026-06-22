@@ -3,9 +3,12 @@
 process.stdin.setEncoding("utf8");
 let buf = "";
 
+const http = require("http");
+const _agent = new http.Agent({ keepAlive: true, maxSockets: 2 });
+
 function httpGet(url) {
   return new Promise((resolve) => {
-    require("http").get(url, (res) => {
+    http.get(url, { agent: _agent }, (res) => {
       let d = ""; res.on("data", (c) => (d += c));
       res.on("end", () => resolve(d));
     }).on("error", () => resolve(null));
@@ -36,7 +39,7 @@ process.stdin.on("data", (chunk) => {
       try { ver = JSON.parse(require("fs").readFileSync(require("path").join(__dirname, "..", "version.json"), "utf8")).full || ""; } catch {}
       process.stdout.write(JSON.stringify({jsonrpc:"2.0",id:m.id,result:{protocolVersion:"2024-11-05",capabilities:{tools:{}},serverInfo:{name:"cc-trace",version:ver}}}) + "\n");
       // Start HTTP server after MCP init
-      try { require("./server.js").start(13779); } catch(e) {}
+      try { require("./server.js").start(13779); } catch(e) { console.error("[cc-trace] HTTP server failed:", e.message); }
     } else if (m.method === "tools/list") {
       process.stdout.write(JSON.stringify({jsonrpc:"2.0",id:m.id,result:{tools:[
         {name:"trace_status",description:"Get cc-trace server status",inputSchema:{type:"object",properties:{}}},
