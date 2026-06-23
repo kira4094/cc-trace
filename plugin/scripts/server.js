@@ -558,15 +558,27 @@ function start(port, host, retries) {
     server.on("error", (err) => {
       if (err.code === 'EADDRINUSE' && n < MAX_RETRIES) {
         console.error(`[cc-trace] Port ${port} in use, retry ${n + 1}/${MAX_RETRIES}...`);
-        // Try to kill stale server via PID file
-        try {
-          const oldPid = parseInt(fs.readFileSync(pidFile, 'utf8').trim(), 10);
-          if (oldPid && oldPid !== process.pid) {
-            const { spawnSync } = require('child_process');
-            spawnSync('taskkill', ['/PID', String(oldPid), '/F'], { timeout: 3000 });
-          }
-        } catch {}
-        setTimeout(() => attempt(n + 1), 1000);
+        // Check if existing server is healthy before any kill
+        const http = require('http');
+        const req = http.get(`http://${host}:${port}/api/status`, (res) => {
+          let d = ''; res.on('data', c => d += c);
+          res.on('end', () => {
+            if (d) { console.error('[cc-trace] Existing server is healthy, reusing it'); return; }
+            retryKill(n + 1);
+          });
+        });
+        req.on('error', () => retryKill(n + 1));
+        req.setTimeout(1000, () => { req.destroy(); retryKill(n + 1); });
+        function retryKill(next) {
+          try {
+            const oldPid = parseInt(fs.readFileSync(pidFile, 'utf8').trim(), 10);
+            if (oldPid && oldPid !== process.pid) {
+              const { spawnSync } = require('child_process');
+              spawnSync('taskkill', ['/PID', String(oldPid), '/F'], { timeout: 3000 });
+            }
+          } catch {}
+          setTimeout(() => attempt(next), 1000);
+        }
       } else {
         console.error("[cc-trace] Server error:", err.message);
       }
