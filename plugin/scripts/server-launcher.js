@@ -38,8 +38,6 @@ process.stdin.on("data", (chunk) => {
       let ver = "";
       try { ver = JSON.parse(require("fs").readFileSync(require("path").join(__dirname, "..", "version.json"), "utf8")).full || ""; } catch {}
       process.stdout.write(JSON.stringify({jsonrpc:"2.0",id:m.id,result:{protocolVersion:"2024-11-05",capabilities:{tools:{}},serverInfo:{name:"cc-trace",version:ver}}}) + "\n");
-      // Ensure HTTP server is up (borrow the tried-and-true .cjs launcher)
-      try { require("child_process").execSync("node " + require("path").join(__dirname, "server-launcher.cjs"), { timeout: 5000, stdio: "ignore" }); } catch {}
     } else if (m.method === "tools/list") {
       process.stdout.write(JSON.stringify({jsonrpc:"2.0",id:m.id,result:{tools:[
         {name:"trace_status",description:"Get cc-trace server status",inputSchema:{type:"object",properties:{}}},
