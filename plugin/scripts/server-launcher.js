@@ -42,11 +42,9 @@ process.stdin.on("data", (chunk) => {
       httpGet("http://localhost:13779/api/status").then((body) => {
         if (!body) {
           const { spawn } = require("child_process");
-          const p = require("path").join(__dirname, "server.js");
-          const child = spawn(process.execPath, [p], {
-            detached: true,
-            stdio: "ignore",
-            windowsHide: true,
+          const serverPath = require("path").join(__dirname, "server.js");
+          const child = spawn(process.execPath, [serverPath], {
+            detached: true, stdio: "ignore", windowsHide: true,
           });
           child.unref();
         }
