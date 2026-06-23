@@ -5,8 +5,10 @@ disable-model-invocation: true
 allowed-tools: [Bash]
 ---
 
-Restart the cc-trace server:
+Restart the cc-trace server by running the launcher script:
 
-`node "C:\Users\kiray\.claude\plugins\cache\cc-trace\cc-trace\v2.2.9-20260622.2232-\scripts\server-launcher.cjs"`
+`node "${CLAUDE_PLUGIN_ROOT}/scripts/server-launcher.cjs"`
 
-Then tell the user to run `/reload-plugins` if the server doesn't come back within 5 seconds.
+Then check if the server is back:
+
+`curl -s "http://localhost:13779/api/status"`
