@@ -279,10 +279,6 @@ async function main() {
     const allSessions = scanAllSessions();
     if (allSessions.length === 0) return;
 
-    // Cap total skills at 30 to prevent bloat
-    const existingLimit = loadSkillIndex();
-    if (existingLimit.length >= 30) return;
-
     // Check if any session has activity since our last analysis
     try {
       if (fs.existsSync(LAST_ANALYZE)) {
