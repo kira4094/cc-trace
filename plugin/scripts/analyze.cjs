@@ -324,9 +324,14 @@ async function main() {
       "- instructions: Claude 应该怎么做（中文，2-3句）\n" +
       "- evidence: 哪些 session 的什么对话证明这个模式（中文，引用原文）\n" +
       "- confidence: 0-1 数字，这个模式有多可靠\n\n" +
-      "只输出 confidence >= 0.7 的模式。用 ```json 和 ``` 包裹 JSON 输出。没有合格模式就输出空数组 []。";
+      "只输出 confidence >= 0.7 的模式。用 ```json 和 ``` 包裹 JSON 输出。没有合格模式就输出空数组 []。\n" +
+      "重要：不要生成与已有 Skill 描述相似的模式。如果新模式跟已有 Skill 说的是同一件事，跳过。";
 
-    const userPrompt = `分析以下会话历史，找出可重复使用的模式：\n\n${sessionSummary}`;
+    // Load existing skills to tell AI what to avoid
+    const existingSkills = loadSkillIndex();
+    const existingList = existingSkills.map((s) => `- ${s.name}: ${s.desc}`).join("\n");
+
+    const userPrompt = `分析以下会话历史，找出可重复使用的模式：\n\n${sessionSummary}\n\n已有 Skill（不要重复生成）：\n${existingList || "（无）"}`;
 
     // Retry up to 3 times for API reliability
     let analysis = null;
