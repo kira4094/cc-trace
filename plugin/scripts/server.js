@@ -591,18 +591,6 @@ function start(port, host, retries) {
   }
 
   attempt(0);
-
-  // Parent process heartbeat — self-destruct if parent dies (Windows orphan prevention)
-  const PPID = process.ppid;
-  setInterval(() => {
-    try {
-      const { spawnSync } = require('child_process');
-      const r = spawnSync('tasklist', ['/FI', `PID eq ${PPID}`, '/NH'], { timeout: 2000, encoding: 'utf8' });
-      if (r.status === 0 && !r.stdout.includes(String(PPID))) {
-        process.exit(0);
-      }
-    } catch {}
-  }, 15000);
 }
 
 // ── Self-start ──────────────────────────────────────────────────────────
