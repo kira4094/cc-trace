@@ -38,8 +38,16 @@ process.stdin.on("data", (chunk) => {
       let ver = "";
       try { ver = JSON.parse(require("fs").readFileSync(require("path").join(__dirname, "..", "version.json"), "utf8")).full || ""; } catch {}
       process.stdout.write(JSON.stringify({jsonrpc:"2.0",id:m.id,result:{protocolVersion:"2024-11-05",capabilities:{tools:{}},serverInfo:{name:"cc-trace",version:ver}}}) + "\n");
-      // Start HTTP server after MCP init
-      try { require("./server.js").start(13779); } catch(e) { console.error("[cc-trace] HTTP server failed:", e.message); }
+      // Ensure HTTP server is running (detached, survives MCP process)
+      httpGet("http://localhost:13779/api/status").then((body) => {
+        if (!body) {
+          const { spawn } = require("child_process");
+          const child = spawn(process.execPath, [require("path").join(__dirname, "server.js")], {
+            detached: true, stdio: "ignore", windowsHide: true,
+          });
+          child.unref();
+        }
+      });
     } else if (m.method === "tools/list") {
       process.stdout.write(JSON.stringify({jsonrpc:"2.0",id:m.id,result:{tools:[
         {name:"trace_status",description:"Get cc-trace server status",inputSchema:{type:"object",properties:{}}},
