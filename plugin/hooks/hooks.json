@@ -4,7 +4,8 @@
     "Setup": [{
       "matcher": "*",
       "hooks": [
-        { "type": "command", "shell": "bash", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/register-statusline.cjs\"", "timeout": 5 }
+        { "type": "command", "shell": "bash", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/register-statusline.cjs\"", "timeout": 5 },
+        { "type": "command", "shell": "bash", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/ensure-server.cjs\"", "async": true, "timeout": 10 }
       ]
     }],
     "SessionStart": [{
