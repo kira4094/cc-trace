@@ -24,21 +24,28 @@ function listeningPID() {
   return null;
 }
 
+// Read installed version
 let installedVer = "";
 try { installedVer = JSON.parse(fs.readFileSync(INSTALLED_VERSION, "utf8")).full || ""; } catch {}
 
 const runningPid = listeningPID();
 
 if (runningPid) {
+  // Read running server's version
   let runningVer = "";
   try { runningVer = fs.readFileSync(VERSION_FILE, "utf8").trim(); } catch {}
+
   if (runningVer === installedVer) {
+    // Version matches — keep existing server
     try { fs.writeFileSync(PIDFILE, runningPid); } catch {}
     process.exit(0);
   }
+
+  // Version mismatch — kill old server
   try {
     execSync(`taskkill /F /PID ${runningPid}`, { stdio: "ignore", timeout: 3000 });
   } catch {}
+  // Wait briefly for port to be free
   const start = Date.now();
   while (Date.now() - start < 3000) {
     if (!listeningPID()) break;
@@ -46,6 +53,7 @@ if (runningPid) {
   }
 }
 
+// Spawn new server
 const server = spawn(process.execPath, [path.join(__dirname, "server.js")], {
   detached: true, stdio: "ignore", windowsHide: true,
 });
