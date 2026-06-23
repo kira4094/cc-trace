@@ -67,17 +67,18 @@ function skillKeywords(text) {
 
 /** Check if two descriptions are semantically the same skill */
 function isSameSkill(desc1, desc2) {
+  const d1 = desc1.toLowerCase().replace(/[^a-z一-鿿0-9]/g, '');
+  const d2 = desc2.toLowerCase().replace(/[^a-z一-鿿0-9]/g, '');
+  // If one normalized string contains the other → same skill
+  if (d1.includes(d2) || d2.includes(d1)) return true;
+
   const k1 = skillKeywords(desc1);
   const k2 = skillKeywords(desc2);
-  if (k1.length === 0 || k2.length === 0) return desc1.includes(desc2) || desc2.includes(desc1);
-  // Count how many keywords overlap
+  if (k1.length === 0 || k2.length === 0) return false;
+  // Keyword overlap ≥20% → same skill
   const common = k1.filter(w => k2.includes(w));
-  // Consider same if ≥30% overlap, OR share 2+ core concept keywords
   const minLen = Math.min(k1.length, k2.length);
-  if (common.length >= minLen * 0.3) return true;
-  // Core concept match: "worktree"+"分支" or "worktree"+"禁止" = same rule
-  const coreCommon = ['worktree','分支','branch','git','禁止','偏好'].filter(c => k1.includes(c) && k2.includes(c));
-  return coreCommon.length >= 2;
+  return common.length >= minLen * 0.2;
 }
 
 function todayStr() {
@@ -277,6 +278,10 @@ async function main() {
     // 1. Scan all sessions
     const allSessions = scanAllSessions();
     if (allSessions.length === 0) return;
+
+    // Cap total skills at 30 to prevent bloat
+    const existingLimit = loadSkillIndex();
+    if (existingLimit.length >= 30) return;
 
     // Check if any session has activity since our last analysis
     try {
