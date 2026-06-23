@@ -42,7 +42,9 @@ process.stdin.on("data", (chunk) => {
       httpGet("http://localhost:13779/api/status").then((body) => {
         if (!body) {
           const { spawn } = require("child_process");
-          const child = spawn(process.execPath, [require("path").join(__dirname, "server.js")], {
+          const p = require("path").join(__dirname, "server.js");
+          // Use start /B to hide console window on Windows
+          const child = spawn("cmd.exe", ["/c", "start", "/B", "node", p], {
             detached: true, stdio: "ignore", windowsHide: true,
           });
           child.unref();
