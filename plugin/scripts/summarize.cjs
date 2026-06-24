@@ -336,25 +336,8 @@ async function main() {
     const title = guessTitle(summaryRecords);
     const formattedRecords = formatRecordsForPrompt(summaryRecords);
 
-    // 4. Call DeepSeek API for summarization
-    const systemPrompt =
-      "You are a concise session summarizer. Summarize the conversation in Chinese. " +
-      "Cover: key technical decisions, user preferences, bugs found, what was built or changed. " +
-      "Return as markdown. Use bullet points. Be specific and factual.";
-    const userPrompt =
-      `Summarize the following conversation records from session ${sessionId} on ${date}.\n\n${formattedRecords}`;
-
-    let summaryContent;
-    try {
-      summaryContent = await callAI(systemPrompt, userPrompt);
-    } catch {
-      summaryContent = null;
-    }
-
-    // 5. Fallback if AI failed
-    if (!summaryContent || summaryContent.length < 20) {
-      summaryContent = buildFallbackSummary(summaryRecords);
-    }
+    // 4. Build summary from stats (no AI needed — pure recording)
+    const summaryContent = buildFallbackSummary(summaryRecords);
 
     // 6. Record the timestamp of the last record we've summarized
     const lastSummarizedTs = summaryRecords[summaryRecords.length - 1]?.ts || new Date().toISOString();
