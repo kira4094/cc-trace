@@ -6,13 +6,5 @@
     "name": "kira4094"
   },
   "repository": "https://github.com/kira4094/cc-trace",
-  "license": "MIT",
-  "mcpServers": {
-    "cc-trace": {
-      "command": "node",
-      "args": [
-        "${CLAUDE_PLUGIN_ROOT}/scripts/server-launcher.js"
-      ]
-    }
-  }
+  "license": "MIT"
 }
