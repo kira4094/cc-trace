@@ -18,7 +18,6 @@
 - **自我进化** — 跨会话分析重复模式，自动生成 Skill，Claude 下次自动遵守
 - **Web UI** — 在浏览器里翻会话、项目、记忆，地址 `http://localhost:13779`
 - **statusLine** — 配合 [cc-statusline](https://github.com/kira4094/cc-statusline) 在状态栏看到实时统计
-- **MCP 工具** — `trace_status` 和 `trace_search` 作为 MCP 工具提供，生命周期通过 stdio 自动管理
 - **自带大模型** — 自动继承 Claude Code 的模型配置（Anthropic/DeepSeek/GLM 等），零额外配置
 
 ### 状态栏说明
@@ -91,10 +90,11 @@ npm uninstall -g @kira4094/cc-trace
   │   (重复修正、用户偏好、常用工作流)
   ├── 新会话开始 → 记忆 + Skill 注入到提示词
   ├── Web UI 在端口 13779 提供浏览
-  └── MCP 服务器生命周期 (stdio)
-      ├── Claude Code 启动 → 自动启动 MCP + HTTP 服务
-      ├── trace_status / trace_search 工具可用
-      └── Claude Code 退出 → 自动关闭，无残留进程
+  └── 通过 Setup hook 启动 HTTP 服务器（主进程）
+      ├── Claude Code 启动 → Setup hook 创建独立孤儿进程
+      ├── 服务器运行在 MCP Job Object 之外 → 空闲超时也不被杀
+      ├── 新 session → hook 检查端口 → 复用已有服务器
+      └── 跨 session 持续存活，仅在更新时重启
 ```
 
 ## 协议

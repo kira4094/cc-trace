@@ -18,7 +18,6 @@
 - **Self-improving** — analyzes cross-session patterns, automatically generates reusable Skills that Claude follows in future sessions
 - **Web UI** — browse sessions, projects, and memories at `http://localhost:13779`
 - **statusLine** — real-time stats in your status bar when paired with [cc-statusline](https://github.com/kira4094/cc-statusline)
-- **MCP tools** — `trace_status` and `trace_search` available as MCP tools, auto lifecycle via stdio
 - **Bring your own LLM** — automatically uses your Claude Code model config (Anthropic, DeepSeek, GLM, etc.), zero extra setup
 
 ### Status bar reference
@@ -91,10 +90,11 @@ Message or tool call
   │   (repeated corrections, user preferences, common workflows)
   ├── next session starts → memories + Skills injected into prompt
   ├── Web UI serves on port 13779
-  └── MCP server auto lifecycle (stdio)
-      ├── Claude Code starts → spawns MCP + HTTP server
-      ├── trace_status / trace_search tools available
-      └── Claude Code exits → clean shutdown, no orphans
+  └── HTTP server started via Setup hook (main process)
+      ├── Claude Code starts → Setup hook spawns detached orphan server
+      ├── Server runs outside MCP Job Object → survives idle kills
+      ├── Next session → hook checks port → reuses existing server
+      └── Server stays alive across sessions, restarts only on update
 ```
 
 ## License
