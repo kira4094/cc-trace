@@ -13,7 +13,7 @@ function listeningPID() {
   try {
     const out = execSync(
       `netstat -ano | findstr ":13779 " | findstr LISTENING`,
-      { encoding: "utf8", timeout: 3000 }
+      { encoding: "utf8", timeout: 3000, windowsHide: true }
     ).trim();
     for (const line of out.split("\n").filter(Boolean)) {
       const parts = line.trim().split(/\s+/);
@@ -43,13 +43,13 @@ if (runningPid) {
 
   // Version mismatch — kill old server
   try {
-    execSync(`taskkill /F /PID ${runningPid}`, { stdio: "ignore", timeout: 3000 });
+    execSync(`taskkill /F /PID ${runningPid}`, { stdio: "ignore", timeout: 3000, windowsHide: true });
   } catch {}
   // Wait briefly for port to be free
   const start = Date.now();
   while (Date.now() - start < 3000) {
     if (!listeningPID()) break;
-    execSync("ping -n 2 127.0.0.1 >nul", { stdio: "ignore" });
+    execSync("ping -n 2 127.0.0.1 >nul", { stdio: "ignore", windowsHide: true });
   }
 }
 
