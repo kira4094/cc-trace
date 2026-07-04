@@ -157,7 +157,7 @@ function callAI(systemPrompt, userPrompt) {
       model: cfg.model,
       messages: [
         { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt.slice(0, 60000) },
+        { role: "user", content: userPrompt.slice(0, 400000) },
       ],
       max_tokens: MAX_TOKENS,
       temperature: TEMPERATURE,
@@ -203,7 +203,7 @@ function buildSessionSummary(sessions) {
     for (const r of s.records) {
       if (r.type === "user_message") {
         userCount++;
-        if (userCount <= 3) output += `[USER] ${(r.content || "").slice(0, 150)}\n`;
+        output += `[USER] ${r.content || ""}\n`;
       }
       if (r.type === "tool_use") {
         toolCount++;
