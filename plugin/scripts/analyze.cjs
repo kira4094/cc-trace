@@ -420,7 +420,7 @@ async function main() {
     if (patterns.length === 0) return;
 
     // 8. Dedup against existing skills, then write new ones
-    const existingSkills = loadSkillIndex();
+    const currentSkills = loadSkillIndex();
     const existingNames = new Set(existingSkills.map((s) => s.name));
 
     for (const p of patterns) {
