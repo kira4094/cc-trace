@@ -1,13 +1,15 @@
 #!/usr/bin/env node
 /**
  * cc-trace analyze.cjs
- * Cross-session pattern analyzer: finds repeated corrections, common workflows,
- * and user preferences across all sessions, then generates Skill files.
+ * Cross-session pattern analyzer with three-tier evidence → promotion pipeline.
  *
- * Usage:
- *   node analyze.cjs                       # Full analysis of all sessions
- *   node analyze.cjs --checkpoint          # Incremental: only new sessions
- *   node analyze.cjs --force               # Re-analyze everything
+ * Modes:
+ *   node analyze.cjs                # Incremental: only new sessions
+ *   node analyze.cjs --bootstrap    # Full analysis of all sessions → evidence.json
+ *
+ * Architecture:
+ *   Stop hook → extract evidence → merge into evidence.json → check promotion
+ *   → promote qualified patterns to SKILL.md (skill-creator format)
  *
  * Zero npm dependencies. Node.js 18+ required.
  */
@@ -22,14 +24,17 @@ const https = require("https");
 const HOME = os.homedir();
 const TRACE_DIR = path.join(HOME, ".claude-memory");
 const SESSIONS_DIR = path.join(TRACE_DIR, "sessions");
+const EVIDENCE_DIR = path.join(TRACE_DIR, "evidence");
+const EVIDENCE_PATH = path.join(EVIDENCE_DIR, "evidence.json");
 const SKILLS_DIR = path.join(TRACE_DIR, "skills");
 const SKILLS_INDEX = path.join(SKILLS_DIR, "SKILLS.md");
 const SETTINGS_PATH = path.join(HOME, ".claude", "settings.json");
-const CONFIG_PATH = path.join(TRACE_DIR, "config.json");
 
 const MAX_TOKENS = 4000;
 const TEMPERATURE = 0.3;
-const MAX_SESSIONS_FOR_ANALYSIS = 20; // cap sessions to avoid token blowup
+const MAX_SESSIONS_FOR_ANALYSIS = 20;
+const PROMOTE_MIN_HITS = 3;
+const PROMOTE_MIN_CONFIDENCE = 0.65;
 
 // ── LLM Config ───────────────────────────────────────────────────
 
@@ -56,7 +61,11 @@ function ensureDir(dir) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
 
-/** Extract meaningful Chinese/English keywords for dedup comparison */
+function todayStr() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/** Extract meaningful keywords for dedup comparison */
 function skillKeywords(text) {
   const cleaned = text.toLowerCase()
     .replace(/[^a-z0-9一-鿿]/g, ' ')
@@ -65,27 +74,20 @@ function skillKeywords(text) {
   return cleaned.split(/\s+/).filter(w => w.length >= 2);
 }
 
-/** Check if two descriptions are semantically the same skill */
-function isSameSkill(desc1, desc2) {
+/** Check if two descriptions are semantically the same rule */
+function isSameRule(desc1, desc2) {
   const d1 = desc1.toLowerCase().replace(/[^a-z一-鿿0-9]/g, '');
   const d2 = desc2.toLowerCase().replace(/[^a-z一-鿿0-9]/g, '');
-  // If one normalized string contains the other → same skill
   if (d1.includes(d2) || d2.includes(d1)) return true;
-
   const k1 = skillKeywords(desc1);
   const k2 = skillKeywords(desc2);
   if (k1.length === 0 || k2.length === 0) return false;
-  // Keyword overlap ≥20% → same skill
   const common = k1.filter(w => k2.includes(w));
   const minLen = Math.min(k1.length, k2.length);
   return common.length >= minLen * 0.2;
 }
 
-function todayStr() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-/** Scan sessions using new directory structure: proj/sid/date/chunk */
+/** Scan sessions using proj/sid/date/chunk structure */
 function scanAllSessions() {
   const results = [];
   if (!fs.existsSync(SESSIONS_DIR)) return results;
@@ -109,11 +111,9 @@ function scanAllSessions() {
         if (!dd.isDirectory()) continue;
         if (dd.name > latestDate) latestDate = dd.name;
         const dateDir = path.join(sidDir, dd.name);
-
         const chunks = fs.readdirSync(dateDir)
           .filter((f) => f.startsWith("chunk-") && f.endsWith(".jsonl"))
           .sort();
-
         for (const chunk of chunks) {
           try {
             const raw = fs.readFileSync(path.join(dateDir, chunk), "utf8");
@@ -132,22 +132,7 @@ function scanAllSessions() {
   return results;
 }
 
-/** Load existing SKILLS.md and return existing skill names */
-function loadSkillIndex() {
-  const entries = [];
-  try {
-    if (fs.existsSync(SKILLS_INDEX)) {
-      const content = fs.readFileSync(SKILLS_INDEX, "utf8");
-      for (const line of content.split("\n")) {
-        const m = line.match(/^\s*-\s+\[([^\]]+)\]\s*(.*)?$/);
-        if (m) entries.push({ name: m[1].trim(), desc: (m[2] || "").trim() });
-      }
-    }
-  } catch {}
-  return entries;
-}
-
-/** Call configured LLM API for analysis */
+/** Call configured LLM API */
 function callAI(systemPrompt, userPrompt) {
   return new Promise((resolve) => {
     const cfg = getApiConfig();
@@ -172,7 +157,7 @@ function callAI(systemPrompt, userPrompt) {
           Authorization: `Bearer ${cfg.apiKey}`,
           "User-Agent": "cc-trace/1.0",
         },
-        timeout: 60000,
+        timeout: 120000,
       },
       (res) => {
         let data = "";
@@ -215,242 +200,384 @@ function buildSessionSummary(sessions) {
   return output;
 }
 
-/** Write a Skill file with frontmatter */
-function writeSkillFile(name, description, trigger, content, evidence) {
+// ── Evidence Storage ─────────────────────────────────────────────
+
+/** Load evidence.json, returns { patterns: [] } if missing */
+function loadEvidence() {
+  try {
+    if (fs.existsSync(EVIDENCE_PATH)) {
+      return JSON.parse(fs.readFileSync(EVIDENCE_PATH, "utf8"));
+    }
+  } catch {}
+  return { patterns: [] };
+}
+
+/** Atomically write evidence.json */
+function writeEvidence(data) {
+  ensureDir(EVIDENCE_DIR);
+  const tmp = EVIDENCE_PATH + ".tmp";
+  fs.writeFileSync(tmp, JSON.stringify(data, null, 2), "utf8");
+  fs.renameSync(tmp, EVIDENCE_PATH);
+}
+
+/**
+ * Merge AI-extracted patterns into existing evidence.
+ * Matches by domain + rule similarity, updates hits/confidence/evidence.
+ */
+function mergeEvidence(existing, newPatterns) {
+  for (const np of newPatterns) {
+    const rule = (np.rule || "").toLowerCase();
+    const domain = (np.domain || "").toLowerCase();
+    const conf = np.confidence || "LOW";
+    const confValue = { HIGH: 0.9, MEDIUM: 0.7, LOW: 0.4 }[conf] || 0.4;
+
+    // Try to find existing match
+    let matched = false;
+    for (const ep of existing.patterns) {
+      if (isSameRule(rule, ep.rule)) {
+        // Update hit count
+        ep.hits = (ep.hits || 0) + 1;
+        ep.lastSeen = todayStr();
+        if (!ep.firstSeen) ep.firstSeen = todayStr();
+
+        // Update confidence (weighted average)
+        const total = (ep.hits || 0);
+        ep.avgConfidence = ((ep.avgConfidence || 0) * (total - 1) + confValue) / total;
+
+        // Append new evidence entry
+        if (np.quote) {
+          const alreadyQuoted = ep.evidence.some(e => e.quote === np.quote);
+          if (!alreadyQuoted) {
+            ep.evidence.push({
+              sessionId: np.sessionId || "",
+              date: todayStr(),
+              quote: np.quote.slice(0, 200),
+              confidence: conf,
+            });
+          }
+        }
+        // Update description if new one is better
+        if (np.rule && np.rule.length > (ep.rule || "").length) {
+          ep.rule = np.rule;
+        }
+        matched = true;
+        break;
+      }
+    }
+
+    if (!matched) {
+      // Create new evidence entry
+      existing.patterns.push({
+        id: `pat-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        domain,
+        rule: np.rule || "",
+        avgConfidence: confValue,
+        hits: 1,
+        firstSeen: todayStr(),
+        lastSeen: todayStr(),
+        status: "raw",
+        evidence: np.quote ? [{
+          sessionId: np.sessionId || "",
+          date: todayStr(),
+          quote: np.quote.slice(0, 200),
+          confidence: conf,
+        }] : [],
+      });
+    }
+  }
+  return existing;
+}
+
+/**
+ * Check which evidence patterns qualify for promotion.
+ * Returns patterns where hits >= PROMOTE_MIN_HITS and avgConfidence >= PROMOTE_MIN_CONFIDENCE.
+ */
+function checkPromotion(evidence) {
+  const promotable = [];
+  for (const p of evidence.patterns) {
+    if (p.status === "promoted") continue;
+    if ((p.hits || 0) >= PROMOTE_MIN_HITS && (p.avgConfidence || 0) >= PROMOTE_MIN_CONFIDENCE) {
+      promotable.push(p);
+    }
+  }
+  return promotable;
+}
+
+/** Get existing promoted skill names for dedup */
+function loadPromotedNames() {
+  const names = new Set();
+  try {
+    if (fs.existsSync(SKILLS_INDEX)) {
+      const content = fs.readFileSync(SKILLS_INDEX, "utf8");
+      for (const line of content.split("\n")) {
+        const m = line.match(/^\s*-\s+\[([^\]]+)\]/);
+        if (m) names.add(m[1].trim());
+      }
+    }
+  } catch {}
+  return names;
+}
+
+/** Generate SKILL.md from a promoted evidence pattern (skill-creator format) */
+function promoteToSkill(pattern, existingNames) {
+  const name = pattern.domain.replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "") || `skill-${Date.now()}`;
+  if (name.length < 3 || existingNames.has(name)) return null;
+
   ensureDir(SKILLS_DIR);
   const skillPath = path.join(SKILLS_DIR, `${name}.md`);
+
+  // Build trigger phrases from evidence quotes
+  const triggers = pattern.evidence.map(e => e.quote).filter(Boolean).slice(0, 5);
+
+  // Build evidence section
+  const evidenceMd = pattern.evidence.map(e => {
+    const confLabel = e.confidence === "HIGH" ? "（明确）" : e.confidence === "MEDIUM" ? "（多次）" : "（提及）";
+    const dateStr = e.date && e.date.length >= 10 ? e.date.slice(0, 10) : "";
+    return `- Session ${(e.sessionId || "").slice(0, 8)}${dateStr ? " (" + dateStr + ")" : ""}${confLabel}: ${e.quote}`;
+  }).join("\n");
 
   const frontmatter = [
     "---",
     `name: ${name}`,
-    `description: ${description}`,
-    `trigger: ${trigger}`,
+    `description: ${pattern.rule.slice(0, 120)}。涉及${pattern.domain}相关操作时使用。`,
+    `trigger: ${pattern.domain}`,
     "type: cc-trace-skill",
-    `created: ${todayStr()}`,
+    `created: ${pattern.firstSeen || todayStr()}`,
+    `updated: ${pattern.lastSeen || todayStr()}`,
+    `evidence_hits: ${pattern.hits}`,
+    `evidence_confidence: ${(pattern.avgConfidence * 100).toFixed(0)}%`,
     "---",
     "",
   ].join("\n");
 
-  const body = `# ${description}\n\n## Instructions\n\n${content}\n\n## Triggers\n\n${trigger}\n\n## Evidence\n\n${evidence}`;
+  const body = [
+    `# ${pattern.rule}`,
+    "",
+    "## 规则",
+    "",
+    `1. ${pattern.rule}`,
+    "",
+    "## 触发场景",
+    "",
+    ...(triggers.length > 0 ? triggers.map(t => `- ${t}`) : [`- 用户提到"${pattern.domain}"相关内容时`]),
+    "",
+    "## 证据来源",
+    "",
+    evidenceMd,
+    "",
+  ].join("\n");
+
   fs.writeFileSync(skillPath, frontmatter + body, "utf8");
+
+  // Update SKILLS.md index
+  let indexLines = [];
+  try {
+    if (fs.existsSync(SKILLS_INDEX)) {
+      indexLines = fs.readFileSync(SKILLS_INDEX, "utf8").split("\n");
+    }
+  } catch {}
+  const hasHeader = indexLines.some(l => l.startsWith("# Skill Index"));
+  if (!hasHeader) indexLines.unshift("# Skill Index\n");
+  const entry = `- [${name}] ${pattern.rule.slice(0, 80)}`;
+  indexLines.push(entry);
+  fs.writeFileSync(SKILLS_INDEX, indexLines.join("\n").replace(/\n{3,}/g, "\n\n").trim() + "\n", "utf8");
+
   return skillPath;
 }
 
-/** Update SKILLS.md index */
-function updateSkillIndex(name, description) {
-  ensureDir(SKILLS_DIR);
-  let lines = [];
-  try {
-    if (fs.existsSync(SKILLS_INDEX)) {
-      lines = fs.readFileSync(SKILLS_INDEX, "utf8").split("\n");
-    }
-  } catch {}
+// ── AI Prompt ───────────────────────────────────────────────────
 
-  const hasHeader = lines.some((l) => l.startsWith("# Skill Index"));
-  if (!hasHeader) lines.unshift("# Skill Index\n");
-
-  const entry = `- [${name}] ${description.slice(0, 80)}`;
-  const duplicate = lines.some((l) => l.includes(`[${name}]`));
-  if (!duplicate) lines.push(entry);
-
-  fs.writeFileSync(SKILLS_INDEX, lines.join("\n").replace(/\n{3,}/g, "\n\n").trim() + "\n", "utf8");
-}
+const EXTRACT_PROMPT =
+  "你是一个 Claude Code 使用模式分析器。请用中文输出。\n" +
+  "分析以下会话记录，提取用户的行为模式、偏好和规则。\n\n" +
+  "只提取满足以下条件的模式：\n" +
+  "- 用户明确纠正或要求（如'不要用X，用Y'）\n" +
+  "- 用户反复做同一操作（跨 2+ session）\n" +
+  "- 用户说了'记住'、'以后都用'、'always'、'never'等记忆类语言\n\n" +
+  "忽略：\n" +
+  "- 一次性话题（只问过一次的）\n" +
+  "- 通用闲聊\n" +
+  "- 与行为模式无关的对话\n\n" +
+  "输出为 JSON 数组，每项包含：\n" +
+  "- domain: 领域分类（如 version-management、workflow、mcp、ui-design），英文 kebab-case\n" +
+  "- rule: 用户规则的一句话描述（中文）\n" +
+  "- confidence: 置信度，HIGH（明确纠正/要求）、MEDIUM（反复出现）、LOW（提及过）\n" +
+  "- quote: 用户原话或关键操作（中文，引用实际对话）\n" +
+  "- sessionId: 该证据来自哪个 session（使用传人的 sessionId 字段）\n\n" +
+  "用 ```json 和 ``` 包裹 JSON 输出。没有合格模式就输出空数组 []。";
 
 // ── Main ──────────────────────────────────────────────────────────
 
 async function main() {
   const args = process.argv.slice(2);
-  const isCheckpoint = args.includes("--checkpoint");
+  const isBootstrap = args.includes("--bootstrap");
 
   try {
-    // 0. Check if analysis is needed — skip if no new session data
     const LAST_ANALYZE = path.join(TRACE_DIR, "last-analyze.txt");
     const now = new Date().toISOString();
+
+    // ── Bootstrap mode: full analysis → evidence.json ──────────
+    if (isBootstrap) {
+      console.error("[cc-trace] Bootstrap: analyzing all sessions for evidence...");
+      const allSessions = scanAllSessions();
+      if (allSessions.length === 0) { console.error("[cc-trace] No sessions found"); return; }
+
+      // Process in batches
+      for (let i = 0; i < allSessions.length; i += MAX_SESSIONS_FOR_ANALYSIS) {
+        const batch = allSessions.slice(i, i + MAX_SESSIONS_FOR_ANALYSIS);
+        const sessionSummary = buildSessionSummary(batch);
+
+        // Build user prompt with session IDs for each session
+        let analysis = null;
+        for (let retry = 0; retry < 3; retry++) {
+          if (retry > 0) await new Promise(r => setTimeout(r, 2000));
+          analysis = await callAI(EXTRACT_PROMPT, sessionSummary);
+          if (analysis && analysis.trim()) break;
+        }
+        if (!analysis || analysis.trim() === "") continue;
+
+        // Parse AI output
+        let patterns = parseAIResult(analysis);
+        if (!patterns || patterns.length === 0) continue;
+
+        // Attach sessionIds
+        patterns.forEach(p => {
+          if (!p.sessionId && batch.length > 0) p.sessionId = batch[0].sessionId;
+        });
+
+        // Merge into evidence
+        let evidence = loadEvidence();
+        evidence = mergeEvidence(evidence, patterns);
+        writeEvidence(evidence);
+        console.error(`[cc-trace] Bootstrap batch ${i + 1}-${Math.min(i + MAX_SESSIONS_FOR_ANALYSIS, allSessions.length)}: ${patterns.length} patterns extracted`);
+      }
+
+      const total = loadEvidence().patterns.length;
+      console.error(`[cc-trace] Bootstrap complete: ${total} patterns in evidence.json`);
+      try { fs.writeFileSync(LAST_ANALYZE, now, "utf8"); } catch {}
+      return;
+    }
+
+    // ── Incremental mode ──────────────────────────────────────
+
+    // Skip if last run was < 5 min ago
     try {
       if (fs.existsSync(LAST_ANALYZE)) {
-        const lastRun = fs.readFileSync(LAST_ANALYZE, "utf8").trim();
-        // Only skip if last run was less than 5 minutes ago (avoid re-analysis on reload)
-        const elapsed = Date.now() - new Date(lastRun).getTime();
-        if (elapsed < 300000) return; // 5 minutes
+        const elapsed = Date.now() - new Date(fs.readFileSync(LAST_ANALYZE, "utf8").trim()).getTime();
+        if (elapsed < 300000) return;
       }
     } catch {}
 
-    // 1. Scan all sessions
+    // Scan sessions
     const allSessions = scanAllSessions();
     if (allSessions.length === 0) return;
 
-    // Check if any session has activity since our last analysis
+    // Check for new activity
     try {
       if (fs.existsSync(LAST_ANALYZE)) {
         const lastRun = fs.readFileSync(LAST_ANALYZE, "utf8").trim();
-        const hasNewActivity = allSessions.some((s) => {
-          // Check the latest record timestamp
-          const lastRecord = s.records[s.records.length - 1];
-          return lastRecord && lastRecord.ts && lastRecord.ts > lastRun;
+        const hasNew = allSessions.some(s => {
+          const last = s.records[s.records.length - 1];
+          return last && last.ts && last.ts > lastRun;
         });
-        if (!hasNewActivity) return; // No new sessions, skip analysis
+        if (!hasNew) return;
       }
     } catch {}
 
-    // 2. For checkpoint mode, only analyze sessions not yet processed
-    let sessions = allSessions;
-    if (isCheckpoint) {
-      const existing = loadSkillIndex();
-      const existingNames = new Set(existing.map((e) => e.name));
-      // Only analyze sessions that may have new patterns
-      // (simplified: take last 3 sessions)
-      sessions = allSessions.slice(0, 3);
-    }
+    // Only analyze sessions with new activity
+    let newSessions = allSessions;
+    try {
+      if (fs.existsSync(LAST_ANALYZE)) {
+        const lastRun = fs.readFileSync(LAST_ANALYZE, "utf8").trim();
+        newSessions = allSessions.filter(s => {
+          const last = s.records[s.records.length - 1];
+          return last && last.ts && last.ts > lastRun;
+        }).slice(0, 3);
+      }
+    } catch {}
+    if (newSessions.length === 0) return;
 
-    // 3. Build session summary for AI
-    const sessionSummary = buildSessionSummary(sessions.slice(0, MAX_SESSIONS_FOR_ANALYSIS));
+    const sessionSummary = buildSessionSummary(newSessions);
 
-    // 4. Call AI to find patterns (strict thresholds)
-    const systemPrompt =
-      "你是一个 Claude Code 使用模式分析器。请用中文输出。\n" +
-      "严格筛选：只有同时满足以下所有条件的模式才输出：\n\n" +
-      "接受标准：\n" +
-      "- 同一个模式出现在 2+ 个不同会话中（跨 session 证据），或者\n" +
-      "- 用户明确说了'记住'、'以后都用'、'always'、'never'、'不要再用'、'禁止'等记忆类语言，或者\n" +
-      "- 用户对同一问题纠正 Claude 2 次以上\n\n" +
-      "拒绝标准：\n" +
-      "- 一次性话题（如只问过一次黄金价格 → 不是模式）\n" +
-      "- 通用指令（与 Claude 行为无关的）\n" +
-      "- 项目特定的实现细节\n\n" +
-      "输出为 JSON 数组，每项包含：\n" +
-      "- name: 短 kebab-case ID（英文）\n" +
-      "- description: 中文一句话总结\n" +
-      "- trigger: 什么情况下触发（中文）\n" +
-      "- instructions: Claude 应该怎么做（中文，2-3句）\n" +
-      "- evidence: 哪些 session 的什么对话证明这个模式（中文，引用原文）\n" +
-      "- confidence: 0-1 数字，这个模式有多可靠\n\n" +
-      "只输出 confidence >= 0.7 的模式。用 ```json 和 ``` 包裹 JSON 输出。没有合格模式就输出空数组 []。\n" +
-      "重要：不要生成与已有 Skill 描述相似的模式。如果新模式跟已有 Skill 说的是同一件事，跳过。";
-
-    // Load existing skills to tell AI what to avoid
-    const existingSkills = loadSkillIndex();
-    const existingList = existingSkills.map((s) => `- ${s.name}: ${s.desc}`).join("\n");
-
-    const userPrompt = `分析以下会话历史，找出可重复使用的模式：\n\n${sessionSummary}\n\n已有 Skill（不要重复生成）：\n${existingList || "（无）"}`;
-
-    // Retry up to 3 times for API reliability
+    // Call AI to extract evidence
     let analysis = null;
     for (let retry = 0; retry < 3; retry++) {
-      if (retry > 0) await new Promise((r) => setTimeout(r, 2000));
-      analysis = await callAI(systemPrompt, userPrompt);
+      if (retry > 0) await new Promise(r => setTimeout(r, 2000));
+      analysis = await callAI(EXTRACT_PROMPT, sessionSummary);
       if (analysis && analysis.trim()) break;
     }
     if (!analysis || analysis.trim() === "") return;
 
-    // 5. Parse AI output
-    let patterns;
-    try {
-      // Strip markdown code blocks
-      let clean = analysis.replace(/```[\s\S]*?\n/g, '').replace(/```/g, '').trim();
-      // Find outermost JSON array or single object
-      let parsed = null;
+    // Parse AI output
+    const patterns = parseAIResult(analysis);
+    if (!patterns || patterns.length === 0) return;
 
-      // Try array first
-      const arrayMatch = clean.match(/\[[\s\S]*\]/);
-      if (arrayMatch) {
-        try { parsed = JSON.parse(arrayMatch[0]); } catch {}
-      }
-
-      // If not an array, try single object
-      if (!parsed) {
-        const objMatch = clean.match(/\{[\s\S]*\}/);
-        if (objMatch) {
-          try { parsed = [JSON.parse(objMatch[0])]; } catch {}
-        }
-      }
-
-      // If still nothing and response is a flat array of strings, convert to skill format
-      if (!parsed) {
-        try {
-          const flat = JSON.parse(clean);
-          if (Array.isArray(flat)) {
-            parsed = flat.filter(s => typeof s === 'string').map((s, i) => ({
-              name: 'pattern-' + (i + 1),
-              description: s.slice(0, 80),
-              trigger: 'When the conversation relates to: ' + s,
-              instructions: 'Be aware of: ' + s,
-              evidence: 'Auto-detected across sessions'
-            }));
-          }
-        } catch {}
-      }
-
-      patterns = parsed;
-    } catch {}
-
-    if (!patterns || !Array.isArray(patterns) || patterns.length === 0) return;
-
-    // 6. Post-process: filter low-quality patterns
-    const sessionIdRe = /[0-9a-f]{8}[0-9a-f-]*/gi;
-    patterns = patterns.filter((p) => {
-      // Confidence check: default to 0 if missing
-      const conf = typeof p.confidence === 'number' ? p.confidence : 0;
-      if (conf < 0.7) return false;
-
-      // Evidence check: count unique session IDs mentioned
-      const evidence = (p.evidence || '') + ' ' + (p.description || '') + ' ' + (p.trigger || '');
-      const sessionMatches = evidence.match(sessionIdRe) || [];
-      const uniqueSessions = new Set(sessionMatches);
-      // Require 2+ sessions, unless user used memorization keywords
-      const hasMemoryKeywords = /记住|以后都用|always|never|不要再用|禁止|全局规则/i.test(evidence);
-      if (uniqueSessions.size < 2 && !hasMemoryKeywords) return false;
-
-      // Name must be reasonable length
-      const name = (p.name || '').toLowerCase().replace(/[^a-z0-9-]/g, '-');
-      if (name.length < 5 || name === 'skill-') return false;
-
-      return true;
+    // Attach sessionIds from the sessions we analyzed
+    const sessionMap = {};
+    newSessions.forEach(s => { sessionMap[s.date + s.sessionId] = s.sessionId; });
+    patterns.forEach(p => {
+      if (!p.sessionId && newSessions.length > 0) p.sessionId = newSessions[0].sessionId;
     });
 
-    if (patterns.length === 0) return;
+    // Merge into evidence
+    let evidence = loadEvidence();
+    const beforeCount = evidence.patterns.length;
+    evidence = mergeEvidence(evidence, patterns);
+    const newCount = evidence.patterns.length;
+    writeEvidence(evidence);
 
-    // 7. Dedup within new patterns (merge similar descriptions)
-    const merged = [];
-    for (const p of patterns) {
-      const desc = (p.description || '').toLowerCase();
-      const isDuplicate = merged.some((m) => isSameSkill(desc, (m.description || '').toLowerCase()));
-      if (!isDuplicate) merged.push(p);
-    }
-    patterns = merged;
-    if (patterns.length === 0) return;
+    console.error(`[cc-trace] Evidence: ${newCount} patterns (${newCount - beforeCount} new)`);
 
-    // 8. Dedup against existing skills, then write new ones
-    const currentSkills = loadSkillIndex();
-    const existingNames = new Set(existingSkills.map((s) => s.name));
+    // Check promotion
+    const promotable = checkPromotion(evidence);
+    const existingNames = loadPromotedNames();
+    let promotedCount = 0;
 
-    for (const p of patterns) {
-      const name = (p.name || "").toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "") || `skill-${Date.now()}`;
-      const desc = p.description || "Auto-detected pattern";
-      const trigger = p.trigger || "Unknown";
-      const instructions = p.instructions || "Follow user preferences from conversation history.";
-      const evidence = p.evidence || "Detected by cc-trace analyze";
-
-      // Skip if skill name already exists
-      if (existingNames.has(name)) {
-        console.error(`[cc-trace] Skill skipped (duplicate name): ${name}`);
-        continue;
+    for (const p of promotable) {
+      // Group by domain for better naming
+      const result = promoteToSkill(p, existingNames);
+      if (result) {
+        p.status = "promoted";
+        existingNames.add(p.domain.replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, ""));
+        promotedCount++;
+        console.error(`[cc-trace] Skill promoted: ${p.domain} — ${p.rule.slice(0, 60)}`);
       }
-      // Skip if similar description already exists (keyword overlap)
-      const similar = existingSkills.some((s) => isSameSkill(desc, s.desc));
-      if (similar) {
-        console.error(`[cc-trace] Skill skipped (similar exists): ${name}`);
-        continue;
-      }
-
-      writeSkillFile(name, desc, trigger, instructions, evidence);
-      updateSkillIndex(name, desc);
-      console.error(`[cc-trace] Skill generated: ${name} — ${desc}`);
     }
 
-    // 9. Record analysis timestamp
+    // Save updated status
+    if (promotedCount > 0) {
+      writeEvidence(evidence);
+    }
+
+    console.error(`[cc-trace] Done: ${patterns.length} patterns, ${promotedCount} promoted`);
     try { fs.writeFileSync(LAST_ANALYZE, now, "utf8"); } catch {}
   } catch (e) {
     // Silent failure — always exit 0
+  }
+}
+
+/** Parse AI JSON output */
+function parseAIResult(analysis) {
+  try {
+    let clean = analysis.replace(/```[\s\S]*?\n/g, '').replace(/```/g, '').trim();
+    let parsed = null;
+
+    const arrayMatch = clean.match(/\[[\s\S]*\]/);
+    if (arrayMatch) {
+      try { parsed = JSON.parse(arrayMatch[0]); } catch {}
+    }
+    if (!parsed) {
+      const objMatch = clean.match(/\{[\s\S]*\}/);
+      if (objMatch) {
+        try { parsed = [JSON.parse(objMatch[0])]; } catch {}
+      }
+    }
+
+    if (!Array.isArray(parsed)) return null;
+    // Filter out entries without required fields
+    return parsed.filter(p => p.rule && p.rule.trim().length > 3);
+  } catch {
+    return null;
   }
 }
 
